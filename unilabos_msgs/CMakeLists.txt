@@ -23,89 +23,106 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(geometry_msgs REQUIRED)
 
 set(action_files
+  # Basic Commands
   "action/SendCmd.action"
-  "action/Stir.action"
+  "action/Wait.action"
+  
+  # Chemical Operations - Basic
+  "action/Add.action"
+  "action/AddSolid.action"
+  "action/AdjustPH.action"
+  "action/Centrifuge.action"
+  "action/Clean.action"
+  "action/CleanVessel.action"
+  "action/Crystallize.action"
+  "action/Dissolve.action"
+  "action/Dry.action"
+  "action/EvacuateAndRefill.action"
+  "action/Evaporate.action"
+  "action/Filter.action"
+  "action/FilterThrough.action"
   "action/HeatChill.action"
   "action/HeatChillStart.action"
   "action/HeatChillStop.action"
-  "action/AdjustPH.action"
-  "action/ResetHandling.action"
-  "action/Dry.action"
   "action/Hydrogenate.action"
-  "action/Recrystallize.action"
-  "action/CleanVessel.action"
-  "action/Dissolve.action"
-  "action/FilterThrough.action"
-  "action/RunColumn.action"
-  "action/Wait.action"
-  "action/WashSolid.action"
-  "action/Filter.action"
-  "action/Add.action"
-  "action/AddSolid.action"
-  "action/Centrifuge.action"
-  "action/Crystallize.action"
   "action/Purge.action"
+  "action/Recrystallize.action"
+  "action/ResetHandling.action"
+  "action/RunColumn.action"
+  "action/Separate.action"
+  "action/Stir.action"
   "action/StartPurge.action"
   "action/StartStir.action"
   "action/StopPurge.action"
   "action/StopStir.action"
   "action/Transfer.action"
+  "action/WashSolid.action"
+  
+  # Pump Operations
+  "action/PumpTransfer.action"
   "action/SetPumpPosition.action"
-  "action/LiquidHandlerProtocolCreation.action"
+  
+  # Liquid Handler Operations - Basic
+  "action/LiquidHandlerAdd.action"
   "action/LiquidHandlerAspirate.action"
-  "action/LiquidHandlerDiscardTips.action"
   "action/LiquidHandlerDispense.action"
+  "action/LiquidHandlerMix.action"
+  "action/LiquidHandlerMoveTo.action"
+  "action/LiquidHandlerProtocolCreation.action"
+  "action/LiquidHandlerRemove.action"
+  "action/LiquidHandlerSetLiquid.action"
+  "action/LiquidHandlerStamp.action"
+  "action/LiquidHandlerTransfer.action"
+  
+  # Liquid Handler Operations - Tips Management
+  "action/LiquidHandlerDiscardTips.action"
   "action/LiquidHandlerDropTips.action"
   "action/LiquidHandlerDropTips96.action"
-  "action/LiquidHandlerMoveLid.action"
-  "action/LiquidHandlerMovePlate.action"
-  "action/LiquidHandlerMoveResource.action"
   "action/LiquidHandlerPickUpTips.action"
   "action/LiquidHandlerPickUpTips96.action"
   "action/LiquidHandlerReturnTips.action"
   "action/LiquidHandlerReturnTips96.action"
-  "action/LiquidHandlerSetLiquid.action"
   "action/LiquidHandlerSetTipRack.action"
-  "action/LiquidHandlerStamp.action"
-  "action/LiquidHandlerTransfer.action"
-
-  "action/LiquidHandlerTransferBiomek.action"
+  
+  # Liquid Handler Operations - Movement & Positioning
+  "action/LiquidHandlerMoveLid.action"
+  "action/LiquidHandlerMovePlate.action"
+  "action/LiquidHandlerMoveResource.action"
+  
+  # Liquid Handler Operations - Biomek Specific
   "action/LiquidHandlerIncubateBiomek.action"
   "action/LiquidHandlerMoveBiomek.action"
   "action/LiquidHandlerOscillateBiomek.action"
-
-  "action/LiquidHandlerAdd.action"
-  "action/LiquidHandlerMix.action"
-  "action/LiquidHandlerMoveTo.action"
-  "action/LiquidHandlerRemove.action"
-
+  "action/LiquidHandlerTransferBiomek.action"
+  
+  # User Input Operations
   "action/EmptyIn.action"
   "action/FloatSingleInput.action"
   "action/IntSingleInput.action"
-  "action/StrSingleInput.action"
   "action/Point3DSeparateInput.action"
-
+  "action/StrSingleInput.action"
+  
+  # Resource Management
   "action/ResourceCreateFromOuter.action"
   "action/ResourceCreateFromOuterEasy.action"
-
+  
+  # Specialized Equipment Operations
   "action/SolidDispenseAddPowderTube.action"
-
-  "action/PumpTransfer.action"
-  "action/Clean.action"
-  "action/Separate.action"
-  "action/Evaporate.action"
-  "action/EvacuateAndRefill.action"
-
-  "action/WorkStationRun.action"
+  
+  # Workstation & Transport
   "action/AGVTransfer.action"
-
+  "action/WorkStationRun.action"
+  
+  # Dispensing Station Operations
   "action/DispenStationSolnPrep.action"
   "action/DispenStationVialFeed.action"
-
+  
+  # Post-Processing Operations
   "action/PostProcessGrab.action"
   "action/PostProcessTriggerClean.action"
   "action/PostProcessTriggerPostPro.action"
   
+  # Reaction Station Operations
   "action/ReactionStationDripBack.action"
   "action/ReactionStationLiquidFeed.action"
   "action/ReactionStationProExecu.action"

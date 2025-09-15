@@ -12,6 +12,9 @@
 ```
 
 2. 在 `unilabos_msgs/CMakeLists.txt` 中添加新定义的 action
+
+将新的 action 文件添加到 `action_files` 列表中的相应功能分组下。CMakeLists.txt 按功能对 action 文件进行分组，请选择最合适的分组添加你的新 action。
+
 因为在指令集中新建了指令，因此调试时需要编译，并在终端环境中加载临时路径：
 ```bash
 cd unilabos_msgs

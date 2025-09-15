@@ -14,12 +14,22 @@ bool success
 
 2. 在 `unilabos_msgs/CMakeLists.txt` 中添加新定义的 action
 
+将新的 action 文件添加到 `action_files` 列表中的适当功能分组下：
+
 ```cmake
-add_action_files(
-  FILES
-  MyDeviceCmd.action
+set(action_files
+  # Basic Commands
+  "action/SendCmd.action"
+  "action/Wait.action"
+  "action/MyDeviceCmd.action"  # 添加你的新 action 到相应分组
+  
+  # Chemical Operations - Basic
+  "action/Add.action"
+  # ... 其他文件
 )
 ```
+
+注意：文件按功能分组组织，请将新的 action 添加到最适合的分组中。
 
 3. 因为在指令集中新建了指令，因此调试时需要编译，并在终端环境中加载临时路径：
 
