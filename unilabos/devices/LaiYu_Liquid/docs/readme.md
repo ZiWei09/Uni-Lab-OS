@@ -97,6 +97,7 @@ LaiYu_Liquid 是一个完全集成到 UniLabOS 的自动化液体处理工作站
 LaiYu_Liquid/
 ├── __init__.py              # 模块初始化和API导出
 ├── readme.md               # 本文档
+├── rviz_backend.py         # RViz可视化后端
 ├── backend/                # 后端驱动模块
 │   ├── __init__.py
 │   └── laiyu_backend.py    # PyLabRobot兼容后端
