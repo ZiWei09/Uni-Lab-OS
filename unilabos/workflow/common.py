@@ -8,6 +8,20 @@ from typing import Dict, List, Any, Tuple, Optional
 
 Json = Dict[str, Any]
 
+
+# ==================== 默认配置 ====================
+
+# create_resource 节点默认参数
+CREATE_RESOURCE_DEFAULTS = {
+    "device_id": "/PRCXI",
+    "parent": "/PRCXI/PRCXI_Deck",
+    "class_name": "PRCXI_BioER_96_wellplate",
+}
+
+# 默认液体体积 (uL)
+DEFAULT_LIQUID_VOLUME = 1e5
+
+
 # ---------------- Graph ----------------
 
 
@@ -228,7 +242,7 @@ def refactor_data(
 
 
 def build_protocol_graph(
-    labware_info: List[Dict[str, Any]],
+    labware_info: Dict[str, Dict[str, Any]],
     protocol_steps: List[Dict[str, Any]],
     workstation_name: str,
     action_resource_mapping: Optional[Dict[str, str]] = None,
@@ -236,7 +250,7 @@ def build_protocol_graph(
     """统一的协议图构建函数，根据设备类型自动选择构建逻辑
 
     Args:
-        labware_info: labware 信息字典
+        labware_info: labware 信息字典，格式为 {name: {slot, well, labware, ...}, ...}
         protocol_steps: 协议步骤列表
         workstation_name: 工作站名称
         action_resource_mapping: action 到 resource_name 的映射字典，可选
@@ -251,13 +265,21 @@ def build_protocol_graph(
     # 为所有labware创建资源节点
     res_index = 0
     for labware_id, item in labware_info.items():
-        # item_id = item.get("id") or item.get("name", f"item_{uuid.uuid4()}")
         node_id = str(uuid.uuid4())
+
+        # res_id 不能有空格，替换为下划线
+        res_id = str(labware_id).replace(" ", "_")
+
+        # 从 reagent 数据中获取 well 信息
+        wells = item.get("well", [])
+        slot = str(item.get("slot", ""))  # slot_on_deck 是字符串
+        well_count = len(wells) if wells else 1
 
         # 判断节点类型
         if "Rack" in str(labware_id) or "Tip" in str(labware_id):
             lab_node_type = "Labware"
             description = f"Prepare Labware: {labware_id}"
+            liquid_input_slot = wells if wells else [-1]
             liquid_type = []
             liquid_volume = []
         elif item.get("type") == "hardware" or "reactor" in str(labware_id).lower():
@@ -265,13 +287,16 @@ def build_protocol_graph(
                 continue
             lab_node_type = "Sample"
             description = f"Prepare Reactor: {labware_id}"
+            liquid_input_slot = wells if wells else [-1]
             liquid_type = []
             liquid_volume = []
         else:
             lab_node_type = "Reagent"
             description = f"Add Reagent to Flask: {labware_id}"
-            liquid_type = [labware_id]
-            liquid_volume = [1e5]
+            # liquid_input_slot, liquid_type, liquid_volume 数量与 wells 保持一致
+            liquid_input_slot = wells if wells else [-1]
+            liquid_type = [res_id] * well_count
+            liquid_volume = [DEFAULT_LIQUID_VOLUME] * well_count
 
         res_index += 1
         G.add_node(
@@ -283,20 +308,45 @@ def build_protocol_graph(
             lab_node_type=lab_node_type,
             footer="create_resource-host_node",
             param={
-                "res_id": labware_id,
-                "device_id": WORKSTATION_ID,
-                "class_name": "container",
-                "parent": WORKSTATION_ID,
+                "res_id": res_id,
+                "device_id": CREATE_RESOURCE_DEFAULTS["device_id"],
+                "class_name": CREATE_RESOURCE_DEFAULTS["class_name"],
+                "parent": CREATE_RESOURCE_DEFAULTS["parent"],
                 "bind_locations": {"x": 0.0, "y": 0.0, "z": 0.0},
-                "liquid_input_slot": [-1],
+                "liquid_input_slot": liquid_input_slot,
                 "liquid_type": liquid_type,
                 "liquid_volume": liquid_volume,
-                "slot_on_deck": "",
+                "slot_on_deck": slot,
             },
         )
-        resource_last_writer[labware_id] = f"{node_id}:labware"
+        # create_resource 节点输出 liquid_slots，用于连接 transfer_liquid 的 sources/targets
+        resource_last_writer[labware_id] = f"{node_id}:liquid_slots"
 
     last_control_node_id = None
+
+    # 端口名称映射：JSON 字段名 -> 实际 handle key
+    INPUT_PORT_MAPPING = {
+        "sources": "sources_identifier",
+        "targets": "targets_identifier",
+        "vessel": "vessel",
+        "to_vessel": "to_vessel",
+        "from_vessel": "from_vessel",
+        "reagent": "reagent",
+        "solvent": "solvent",
+        "compound": "compound",
+    }
+
+    OUTPUT_PORT_MAPPING = {
+        "sources": "sources_out",  # 输出端口是 xxx_out
+        "targets": "targets_out",  # 输出端口是 xxx_out
+        "vessel": "vessel_out",
+        "to_vessel": "to_vessel_out",
+        "from_vessel": "from_vessel_out",
+        "filtrate_vessel": "filtrate_out",
+        "reagent": "reagent",
+        "solvent": "solvent",
+        "compound": "compound",
+    }
 
     # 处理协议步骤
     for step in protocol_steps:
@@ -310,38 +360,19 @@ def build_protocol_graph(
 
         # 物料流
         params = step.get("param", {})
-        input_resources_possible_names = [
-            "vessel",
-            "to_vessel",
-            "from_vessel",
-            "reagent",
-            "solvent",
-            "compound",
-            "sources",
-            "targets",
-        ]
 
-        for target_port in input_resources_possible_names:
-            resource_name = params.get(target_port)
+        # 处理输入连接
+        for param_key, target_port in INPUT_PORT_MAPPING.items():
+            resource_name = params.get(param_key)
             if resource_name and resource_name in resource_last_writer:
                 source_node, source_port = resource_last_writer[resource_name].split(":")
                 G.add_edge(source_node, node_id, source_port=source_port, target_port=target_port)
 
-        output_resources = {
-            "vessel_out": params.get("vessel"),
-            "from_vessel_out": params.get("from_vessel"),
-            "to_vessel_out": params.get("to_vessel"),
-            "filtrate_out": params.get("filtrate_vessel"),
-            "reagent": params.get("reagent"),
-            "solvent": params.get("solvent"),
-            "compound": params.get("compound"),
-            "sources_out": params.get("sources"),
-            "targets_out": params.get("targets"),
-        }
-
-        for source_port, resource_name in output_resources.items():
+        # 处理输出：更新 resource_last_writer
+        for param_key, output_port in OUTPUT_PORT_MAPPING.items():
+            resource_name = params.get(param_key)
             if resource_name:
-                resource_last_writer[resource_name] = f"{node_id}:{source_port}"
+                resource_last_writer[resource_name] = f"{node_id}:{output_port}"
 
     return G
 

@@ -361,7 +361,7 @@ class HTTPClient:
         """
         # target_lab_uuid 暂时使用默认值，后续由后端根据 ak/sk 获取
         payload = {
-            "target_lab_uuid": "28c38bb0-63f6-4352-b0d8-b5b8eb1766d5",
+            "target_lab_uuid": "cf44e98c-7f3e-4175-b526-1fa338b43f65",
             "name": name,
             "data": {
                 "workflow_uuid": workflow_uuid,
