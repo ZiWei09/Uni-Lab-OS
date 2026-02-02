@@ -884,6 +884,9 @@ class BaseROS2DeviceNode(Node, Generic[T]):
                                 parent_appended = True
 
                 # 加载状态
+                original_instance.location = plr_resource.location
+                original_instance.rotation = plr_resource.rotation
+                original_instance.barcode = plr_resource.barcode
                 original_instance.load_all_state(states)
                 child_count = len(original_instance.get_all_children())
                 self.lab_logger().info(

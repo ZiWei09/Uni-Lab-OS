@@ -520,6 +520,10 @@ class ResourceTreeSet(object):
                 if "category" not in spec.parameters:
                     plr_dict.pop("category", None)
                 plr_resource = sub_cls.deserialize(plr_dict, allow_marshal=True)
+                from pylabrobot.resources import Coordinate
+                from pylabrobot.serializer import deserialize
+                location = cast(Coordinate, deserialize(plr_dict["location"]))
+                plr_resource.location = location
                 plr_resource.load_all_state(all_states)
                 # 使用 DeviceNodeResourceTracker 设置 UUID 和 Extra
                 tracker.loop_set_uuid(plr_resource, name_to_uuid)
