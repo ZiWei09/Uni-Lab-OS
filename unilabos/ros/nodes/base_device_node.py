@@ -49,7 +49,6 @@ from unilabos.resources.resource_tracker import (
     ResourceTreeInstance,
     ResourceDictInstance,
 )
-from unilabos.ros.x.rclpyx import get_event_loop
 from unilabos.ros.utils.driver_creator import WorkstationNodeCreator, PyLabRobotCreator, DeviceClassCreator
 from rclpy.task import Task, Future
 from unilabos.utils.import_manager import default_manager
@@ -185,7 +184,7 @@ class PropertyPublisher:
                 f"创建发布者 {name} 失败，可能由于注册表有误，类型: {msg_type}，错误: {ex}\n{traceback.format_exc()}"
             )
         self.timer = node.create_timer(self.timer_period, self.publish_property)
-        self.__loop = get_event_loop()
+        self.__loop = ROS2DeviceNode.get_asyncio_loop()
         str_msg_type = str(msg_type)[8:-2]
         self.node.lab_logger().trace(f"发布属性: {name}, 类型: {str_msg_type}, 周期: {initial_period}秒, QoS: {qos}")
 
@@ -885,6 +884,9 @@ class BaseROS2DeviceNode(Node, Generic[T]):
                                 parent_appended = True
 
                 # 加载状态
+                original_instance.location = plr_resource.location
+                original_instance.rotation = plr_resource.rotation
+                original_instance.barcode = plr_resource.barcode
                 original_instance.load_all_state(states)
                 child_count = len(original_instance.get_all_children())
                 self.lab_logger().info(
@@ -1320,19 +1322,32 @@ class BaseROS2DeviceNode(Node, Generic[T]):
                             resource_inputs = action_kwargs[k] if is_sequence else [action_kwargs[k]]
 
                             # 批量查询资源
-                            queried_resources = []
-                            for resource_data in resource_inputs:
+                            queried_resources: list = [None] * len(resource_inputs)
+                            uuid_indices: list[tuple[int, str, dict]] = []  # (index, uuid, resource_data)
+
+                            # 第一遍：处理没有uuid的资源，收集有uuid的资源信息
+                            for idx, resource_data in enumerate(resource_inputs):
                                 unilabos_uuid = resource_data.get("data", {}).get("unilabos_uuid")
                                 if unilabos_uuid is None:
                                     plr_resource = await self.get_resource_with_dir(
                                         resource_id=resource_data["id"], with_children=True
                                     )
+                                    if "sample_id" in resource_data:
+                                        plr_resource.unilabos_extra["sample_uuid"] = resource_data["sample_id"]
+                                    queried_resources[idx] = plr_resource
                                 else:
-                                    resource_tree = await self.get_resource([unilabos_uuid])
-                                    plr_resource = resource_tree.to_plr_resources()[0]
-                                if "sample_id" in resource_data:
-                                    plr_resource.unilabos_extra["sample_uuid"] = resource_data["sample_id"]
-                                queried_resources.append(plr_resource)
+                                    uuid_indices.append((idx, unilabos_uuid, resource_data))
+
+                            # 第二遍：批量查询有uuid的资源
+                            if uuid_indices:
+                                uuids = [item[1] for item in uuid_indices]
+                                resource_tree = await self.get_resource(uuids)
+                                plr_resources = resource_tree.to_plr_resources()
+                                for i, (idx, _, resource_data) in enumerate(uuid_indices):
+                                    plr_resource = plr_resources[i]
+                                    if "sample_id" in resource_data:
+                                        plr_resource.unilabos_extra["sample_uuid"] = resource_data["sample_id"]
+                                    queried_resources[idx] = plr_resource
 
                             self.lab_logger().debug(f"资源查询结果: 共 {len(queried_resources)} 个资源")
 
@@ -1757,6 +1772,15 @@ class ROS2DeviceNode:
     它不继承设备类，而是通过代理模式访问设备类的属性和方法。
     """
 
+    # 类变量，用于循环管理
+    _asyncio_loop = None
+    _asyncio_loop_running = False
+    _asyncio_loop_thread = None
+
+    @classmethod
+    def get_asyncio_loop(cls):
+        return cls._asyncio_loop
+
     @staticmethod
     async def safe_task_wrapper(trace_callback, func, **kwargs):
         try:
@@ -1833,6 +1857,11 @@ class ROS2DeviceNode:
             print_publish: 是否打印发布信息
             driver_is_ros:
         """
+        # 在初始化时检查循环状态
+        if ROS2DeviceNode._asyncio_loop_running and ROS2DeviceNode._asyncio_loop_thread is not None:
+            pass
+        elif ROS2DeviceNode._asyncio_loop_thread is None:
+            self._start_loop()
 
         # 保存设备类是否支持异步上下文
         self._has_async_context = hasattr(driver_class, "__aenter__") and hasattr(driver_class, "__aexit__")
@@ -1923,6 +1952,17 @@ class ROS2DeviceNode:
                 self.driver_instance.post_init(self._ros_node)  # type: ignore
             except Exception as e:
                 self._ros_node.lab_logger().error(f"设备后初始化失败: {e}")
+
+    def _start_loop(self):
+        def run_event_loop():
+            loop = asyncio.new_event_loop()
+            ROS2DeviceNode._asyncio_loop = loop
+            asyncio.set_event_loop(loop)
+            loop.run_forever()
+
+        ROS2DeviceNode._asyncio_loop_thread = threading.Thread(target=run_event_loop, daemon=True, name="ROS2DeviceNode")
+        ROS2DeviceNode._asyncio_loop_thread.start()
+        logger.info(f"循环线程已启动")
 
 
 class DeviceInfoType(TypedDict):
