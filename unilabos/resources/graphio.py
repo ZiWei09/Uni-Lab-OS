@@ -260,7 +260,7 @@ def read_node_link_json(
     resource_tree_set = canonicalize_nodes_data(nodes)
 
     # 标准化边数据
-    links = data.get("links", [])
+    links = data.get("links", data.get("edges", []))
     standardized_links = canonicalize_links_ports(links, resource_tree_set)
 
     # 构建 NetworkX 图（需要转换回 dict 格式）
