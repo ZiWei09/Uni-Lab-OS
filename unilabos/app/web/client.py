@@ -359,9 +359,7 @@ class HTTPClient:
         Returns:
             Dict: API响应数据，包含 code 和 data (uuid, name)
         """
-        # target_lab_uuid 暂时使用默认值，后续由后端根据 ak/sk 获取
         payload = {
-            "target_lab_uuid": "cf44e98c-7f3e-4175-b526-1fa338b43f65",
             "name": name,
             "data": {
                 "workflow_uuid": workflow_uuid,

@@ -9284,7 +9284,13 @@ liquid_handler.prcxi:
             data_source: handle
             data_type: resource
             handler_key: input_wells
-            label: InputWells
+            label: 待设定液体孔
+          output:
+          - data_key: wells.@flatten
+            data_source: executor
+            data_type: resource
+            handler_key: output_wells
+            label: 已设定液体孔
         placeholder_keys:
           wells: unilabos_resources
         result: {}
@@ -9400,6 +9406,163 @@ liquid_handler.prcxi:
           title: LiquidHandlerSetLiquid
           type: object
         type: LiquidHandlerSetLiquid
+      set_liquid_from_plate:
+        feedback: {}
+        goal: {}
+        goal_default:
+          liquid_names: null
+          plate: null
+          volumes: null
+          well_names: null
+        handles:
+          input:
+          - data_key: plate
+            data_source: handle
+            data_type: resource
+            handler_key: input_plate
+            label: 待设定液体板
+          output:
+          - data_key: plate.@flatten
+            data_source: executor
+            data_type: resource
+            handler_key: output_plate
+            label: 已设定液体板
+          - data_key: wells.@flatten
+            data_source: executor
+            data_type: resource
+            handler_key: output_wells
+            label: 已设定液体孔
+          - data_key: volumes
+            data_source: executor
+            data_type: number_array
+            handler_key: output_volumes
+            label: 各孔设定体积
+        placeholder_keys:
+          plate: unilabos_resources
+        result: {}
+        schema:
+          description: ''
+          properties:
+            feedback: {}
+            goal:
+              properties:
+                liquid_names:
+                  items:
+                    type: string
+                  type: array
+                plate:
+                  properties:
+                    category:
+                      type: string
+                    children:
+                      items:
+                        type: string
+                      type: array
+                    config:
+                      type: string
+                    data:
+                      type: string
+                    id:
+                      type: string
+                    name:
+                      type: string
+                    parent:
+                      type: string
+                    pose:
+                      properties:
+                        orientation:
+                          properties:
+                            w:
+                              type: number
+                            x:
+                              type: number
+                            y:
+                              type: number
+                            z:
+                              type: number
+                          required:
+                          - x
+                          - y
+                          - z
+                          - w
+                          title: orientation
+                          type: object
+                        position:
+                          properties:
+                            x:
+                              type: number
+                            y:
+                              type: number
+                            z:
+                              type: number
+                          required:
+                          - x
+                          - y
+                          - z
+                          title: position
+                          type: object
+                      required:
+                      - position
+                      - orientation
+                      title: pose
+                      type: object
+                    sample_id:
+                      type: string
+                    type:
+                      type: string
+                  required:
+                  - id
+                  - name
+                  - sample_id
+                  - children
+                  - parent
+                  - type
+                  - category
+                  - pose
+                  - config
+                  - data
+                  title: plate
+                  type: object
+                volumes:
+                  items:
+                    type: number
+                  type: array
+                well_names:
+                  items:
+                    type: string
+                  type: array
+              required:
+              - plate
+              - well_names
+              - liquid_names
+              - volumes
+              type: object
+            result:
+              properties:
+                plate:
+                  items: {}
+                  title: Plate
+                  type: array
+                volumes:
+                  items:
+                    type: number
+                  title: Volumes
+                  type: array
+                wells:
+                  items: {}
+                  title: Wells
+                  type: array
+              required:
+              - plate
+              - wells
+              - volumes
+              title: SetLiquidFromPlateReturn
+              type: object
+          required:
+          - goal
+          title: set_liquid_from_plate参数
+          type: object
+        type: UniLabJsonCommand
       set_tiprack:
         feedback: {}
         goal:

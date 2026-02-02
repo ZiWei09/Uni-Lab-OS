@@ -997,7 +997,7 @@ class DeviceNodeResourceTracker(object):
                 extra = name_to_extra_map[resource_name]
                 self.set_resource_extra(res, extra)
                 if len(extra):
-                    logger.debug(f"设置资源Extra: {resource_name} -> {extra}")
+                    logger.trace(f"设置资源Extra: {resource_name} -> {extra}")
                 return 1
             return 0
 
