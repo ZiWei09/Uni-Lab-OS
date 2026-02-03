@@ -1180,7 +1180,7 @@ class HostNode(BaseROS2DeviceNode):
         """
         更新节点信息回调
         """
-        # self.lab_logger().info(f"[Host Node] Node info update request received: {request}")
+        self.lab_logger().trace(f"[Host Node] Node info update request received: {request}")
         try:
             from unilabos.app.communication import get_communication_client
             from unilabos.app.web.client import HTTPClient, http_client

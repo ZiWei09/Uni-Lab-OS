@@ -9451,78 +9451,81 @@ liquid_handler.prcxi:
                     type: string
                   type: array
                 plate:
-                  properties:
-                    category:
-                      type: string
-                    children:
-                      items:
+                  items:
+                    properties:
+                      category:
                         type: string
-                      type: array
-                    config:
-                      type: string
-                    data:
-                      type: string
-                    id:
-                      type: string
-                    name:
-                      type: string
-                    parent:
-                      type: string
-                    pose:
-                      properties:
-                        orientation:
-                          properties:
-                            w:
-                              type: number
-                            x:
-                              type: number
-                            y:
-                              type: number
-                            z:
-                              type: number
-                          required:
-                          - x
-                          - y
-                          - z
-                          - w
-                          title: orientation
-                          type: object
-                        position:
-                          properties:
-                            x:
-                              type: number
-                            y:
-                              type: number
-                            z:
-                              type: number
-                          required:
-                          - x
-                          - y
-                          - z
-                          title: position
-                          type: object
-                      required:
-                      - position
-                      - orientation
-                      title: pose
-                      type: object
-                    sample_id:
-                      type: string
-                    type:
-                      type: string
-                  required:
-                  - id
-                  - name
-                  - sample_id
-                  - children
-                  - parent
-                  - type
-                  - category
-                  - pose
-                  - config
-                  - data
+                      children:
+                        items:
+                          type: string
+                        type: array
+                      config:
+                        type: string
+                      data:
+                        type: string
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      parent:
+                        type: string
+                      pose:
+                        properties:
+                          orientation:
+                            properties:
+                              w:
+                                type: number
+                              x:
+                                type: number
+                              y:
+                                type: number
+                              z:
+                                type: number
+                            required:
+                            - x
+                            - y
+                            - z
+                            - w
+                            title: orientation
+                            type: object
+                          position:
+                            properties:
+                              x:
+                                type: number
+                              y:
+                                type: number
+                              z:
+                                type: number
+                            required:
+                            - x
+                            - y
+                            - z
+                            title: position
+                            type: object
+                        required:
+                        - position
+                        - orientation
+                        title: pose
+                        type: object
+                      sample_id:
+                        type: string
+                      type:
+                        type: string
+                    required:
+                    - id
+                    - name
+                    - sample_id
+                    - children
+                    - parent
+                    - type
+                    - category
+                    - pose
+                    - config
+                    - data
+                    title: plate
+                    type: object
                   title: plate
-                  type: object
+                  type: array
                 volumes:
                   items:
                     type: number
@@ -9544,8 +9547,7 @@ liquid_handler.prcxi:
                   title: Plate
                   type: array
                 volumes:
-                  items:
-                    type: number
+                  items: {}
                   title: Volumes
                   type: array
                 wells:
