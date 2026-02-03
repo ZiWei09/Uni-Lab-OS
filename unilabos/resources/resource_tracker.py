@@ -341,6 +341,7 @@ class ResourceTreeSet(object):
                 "deck": "deck",
                 "tip_rack": "tip_rack",
                 "tip_spot": "tip_spot",
+                "tip": "tip",  # 添加 tip 类型支持
                 "tube": "tube",
                 "bottle_carrier": "bottle_carrier",
             }
