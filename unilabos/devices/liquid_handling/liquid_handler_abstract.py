@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-import asyncio
 import time
 import traceback
 from collections import Counter
 from typing import List, Sequence, Optional, Literal, Union, Iterator, Dict, Any, Callable, Set, cast
 
-from typing_extensions import TypedDict
 from pylabrobot.liquid_handling import LiquidHandler, LiquidHandlerBackend, LiquidHandlerChatterboxBackend, Strictness
-from unilabos.devices.liquid_handling.rviz_backend import UniLiquidHandlerRvizBackend
-from unilabos.devices.liquid_handling.laiyu.backend.laiyu_v_backend import UniLiquidHandlerLaiyuBackend
 from pylabrobot.liquid_handling.liquid_handler import TipPresenceProbingMethod
 from pylabrobot.liquid_handling.standard import GripDirection
 from pylabrobot.resources import (
@@ -27,26 +23,33 @@ from pylabrobot.resources import (
     Trash,
     Tip,
 )
+from typing_extensions import TypedDict
 
+from unilabos.devices.liquid_handling.rviz_backend import UniLiquidHandlerRvizBackend
 from unilabos.registry.placeholder_type import ResourceSlot
-from unilabos.ros.nodes.base_device_node import BaseROS2DeviceNode
-from unilabos.resources.resource_tracker import ResourceTreeSet
+from unilabos.resources.resource_tracker import ResourceTreeSet, ResourceDict
+from unilabos.ros.nodes.base_device_node import BaseROS2DeviceNode, ROS2DeviceNode
 
 
 class SimpleReturn(TypedDict):
-    samples: list
-    volumes: list
+    samples: List[List[ResourceDict]]
+    volumes: List[float]
 
 
 class SetLiquidReturn(TypedDict):
-    wells: list
-    volumes: list
+    wells: List[List[ResourceDict]]
+    volumes: List[float]
 
 
 class SetLiquidFromPlateReturn(TypedDict):
-    plate: list
-    wells: list
-    volumes: list
+    plate: List[List[ResourceDict]]
+    wells: List[List[ResourceDict]]
+    volumes: List[float]
+
+
+class TransferLiquidReturn(TypedDict):
+    sources: List[List[ResourceDict]]
+    targets: List[List[ResourceDict]]
 
 
 class LiquidHandlerMiddleware(LiquidHandler):
@@ -682,9 +685,8 @@ class LiquidHandlerAbstract(LiquidHandlerMiddleware):
             wells=ResourceTreeSet.from_plr_resources(wells, known_newly_created=False).dump(), volumes=res_volumes  # type: ignore
         )
 
-    @classmethod
     def set_liquid_from_plate(
-        cls, plate: List[ResourceSlot], well_names: list[str], liquid_names: list[str], volumes: list[float]
+        self, plate: List[ResourceSlot], well_names: list[str], liquid_names: list[str], volumes: list[float]
     ) -> SetLiquidFromPlateReturn:
         """Set the liquid in wells of a plate by well names (e.g., A1, A2, B3).
 
@@ -709,6 +711,14 @@ class LiquidHandlerAbstract(LiquidHandlerMiddleware):
         for well, liquid_name, volume in zip(wells, liquid_names, volumes):
             well.set_liquids([(liquid_name, volume)])  # type: ignore
             res_volumes.append(volume)
+
+        task = ROS2DeviceNode.run_async_func(self._ros_node.update_resource, True, **{"resources": wells})
+        submit_time = time.time()
+        while not task.done():
+            if time.time() - submit_time > 10:
+                self._ros_node.lab_logger().info(f"set_liquid_from_plate {plate} 超时")
+                break
+            time.sleep(0.01)
 
         return SetLiquidFromPlateReturn(
             plate=ResourceTreeSet.from_plr_resources([plate], known_newly_created=False).dump(),  # type: ignore
@@ -1115,7 +1125,7 @@ class LiquidHandlerAbstract(LiquidHandlerMiddleware):
         mix_liquid_height: Optional[float] = None,
         delays: Optional[List[int]] = None,
         none_keys: List[str] = [],
-    ):
+    ) -> TransferLiquidReturn:
         """Transfer liquid with automatic mode detection.
 
         Supports three transfer modes:
@@ -1254,6 +1264,11 @@ class LiquidHandlerAbstract(LiquidHandlerMiddleware):
                 f"Unsupported transfer mode: {num_sources} sources -> {num_targets} targets. "
                 "Supported modes: 1->N, N->1, or N->N."
             )
+
+        return TransferLiquidReturn(
+            sources=ResourceTreeSet.from_plr_resources(list(sources), known_newly_created=False).dump(),  # type: ignore
+            targets=ResourceTreeSet.from_plr_resources(list(targets), known_newly_created=False).dump(),  # type: ignore
+        )
 
     async def _transfer_one_to_one(
         self,
