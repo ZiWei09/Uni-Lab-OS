@@ -27,7 +27,12 @@ from typing_extensions import TypedDict
 
 from unilabos.devices.liquid_handling.rviz_backend import UniLiquidHandlerRvizBackend
 from unilabos.registry.placeholder_type import ResourceSlot
-from unilabos.resources.resource_tracker import ResourceTreeSet, ResourceDict
+from unilabos.resources.resource_tracker import (
+    ResourceTreeSet,
+    ResourceDict,
+    EXTRA_SAMPLE_UUID,
+    EXTRA_UNILABOS_SAMPLE_UUID,
+)
 from unilabos.ros.nodes.base_device_node import BaseROS2DeviceNode, ROS2DeviceNode
 
 
@@ -231,12 +236,11 @@ class LiquidHandlerMiddleware(LiquidHandler):
         res_samples = []
         res_volumes = []
         for resource, volume, channel in zip(resources, vols, use_channels):
-            res_samples.append(
-                {"name": resource.name, "sample_uuid": resource.unilabos_extra.get("sample_uuid", None)}
-            )
+            sample_uuid_value = resource.unilabos_extra.get(EXTRA_SAMPLE_UUID, None)
+            res_samples.append({"name": resource.name, EXTRA_SAMPLE_UUID: sample_uuid_value})
             res_volumes.append(volume)
             self.pending_liquids_dict[channel] = {
-                "sample_uuid": resource.unilabos_extra.get("sample_uuid", None),
+                EXTRA_SAMPLE_UUID: sample_uuid_value,
                 "volume": volume,
             }
         return SimpleReturn(samples=res_samples, volumes=res_volumes)
@@ -278,10 +282,10 @@ class LiquidHandlerMiddleware(LiquidHandler):
         res_samples = []
         res_volumes = []
         for resource, volume, channel in zip(resources, vols, use_channels):
-            res_uuid = self.pending_liquids_dict[channel]["sample_uuid"]
+            res_uuid = self.pending_liquids_dict[channel][EXTRA_SAMPLE_UUID]
             self.pending_liquids_dict[channel]["volume"] -= volume
-            resource.unilabos_extra["sample_uuid"] = res_uuid
-            res_samples.append({"name": resource.name, "sample_uuid": res_uuid})
+            resource.unilabos_extra[EXTRA_SAMPLE_UUID] = res_uuid
+            res_samples.append({"name": resource.name, EXTRA_SAMPLE_UUID: res_uuid})
             res_volumes.append(volume)
 
         return SimpleReturn(samples=res_samples, volumes=res_volumes)

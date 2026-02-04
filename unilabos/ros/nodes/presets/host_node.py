@@ -42,6 +42,9 @@ from unilabos.resources.resource_tracker import (
     ResourceDictInstance,
     ResourceTreeSet,
     ResourceTreeInstance,
+    EXTRA_SAMPLE_UUID,
+    EXTRA_UNILABOS_SAMPLE_UUID,
+    RETURN_UNILABOS_SAMPLES,
 )
 from unilabos.utils import logger
 from unilabos.utils.exception import DeviceClassInvalid
@@ -791,12 +794,17 @@ class HostNode(BaseROS2DeviceNode):
 
         action_client: ActionClient = self._action_clients[action_id]
 
-        # 遍历action_kwargs下的所有子dict，将"sample_uuid"的值赋给"sample_id"
+        # 遍历action_kwargs下的所有子dict，将sample_uuid的值赋给sample_id
         def assign_sample_id(obj):
             if isinstance(obj, dict):
-                if "sample_uuid" in obj:
-                    obj["sample_id"] = obj["sample_uuid"]
-                    obj.pop("sample_uuid")
+                # 处理 EXTRA_SAMPLE_UUID ("sample_uuid")
+                if EXTRA_SAMPLE_UUID in obj:
+                    obj["sample_id"] = obj[EXTRA_SAMPLE_UUID]
+                    obj.pop(EXTRA_SAMPLE_UUID)
+                # 处理 EXTRA_UNILABOS_SAMPLE_UUID ("unilabos_sample_uuid")
+                if EXTRA_UNILABOS_SAMPLE_UUID in obj:
+                    obj["sample_id"] = obj[EXTRA_UNILABOS_SAMPLE_UUID]
+                    obj.pop(EXTRA_UNILABOS_SAMPLE_UUID)
                 for k, v in obj.items():
                     if k != "unilabos_extra":
                         assign_sample_id(v)
@@ -867,14 +875,14 @@ class HostNode(BaseROS2DeviceNode):
                         # 适配后端的一些额外处理
                         return_value = return_info.get("return_value")
                         if isinstance(return_value, dict):
-                            unilabos_samples = return_value.pop("unilabos_samples", None)
+                            unilabos_samples = return_value.pop(RETURN_UNILABOS_SAMPLES, None)
                             if isinstance(unilabos_samples, list) and unilabos_samples:
                                 self.lab_logger().info(
                                     f"[Host Node] Job {job_id[:8]} returned {len(unilabos_samples)} sample(s): "
                                     f"{[s.get('name', s.get('id', 'unknown')) if isinstance(s, dict) else str(s)[:20] for s in unilabos_samples[:5]]}"
                                     f"{'...' if len(unilabos_samples) > 5 else ''}"
                                 )
-                                return_info["unilabos_samples"] = unilabos_samples
+                                return_info[RETURN_UNILABOS_SAMPLES] = unilabos_samples
                         suc = return_info.get("suc", False)
                         if not suc:
                             status = "failed"
