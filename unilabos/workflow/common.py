@@ -19,7 +19,9 @@
 
 第一步: 按 slot 去重创建 create_resource 节点（创建板子）
 --------------------------------------------------------------------------------
+- 首先创建一个 Group 节点（type="Group", minimized=true），用于包含所有 create_resource 节点
 - 遍历所有 reagent，按 slot 去重，为每个唯一的 slot 创建一个板子
+- 所有 create_resource 节点的 parent_uuid 指向 Group 节点，minimized=true
 - 生成参数:
     res_id: plate_slot_{slot}
     device_id: /PRCXI
@@ -29,11 +31,13 @@
 - 输出端口: labware（用于连接 set_liquid_from_plate）
 - 控制流: create_resource 之间通过 ready 端口串联
 
-示例: slot=1, slot=4 -> 创建 2 个 create_resource 节点
+示例: slot=1, slot=4 -> 创建 1 个 Group + 2 个 create_resource 节点
 
 第二步: 为每个 reagent 创建 set_liquid_from_plate 节点（设置液体）
 --------------------------------------------------------------------------------
+- 首先创建一个 Group 节点（type="Group", minimized=true），用于包含所有 set_liquid_from_plate 节点
 - 遍历所有 reagent，为每个试剂创建 set_liquid_from_plate 节点
+- 所有 set_liquid_from_plate 节点的 parent_uuid 指向 Group 节点，minimized=true
 - 生成参数:
     plate: []（通过连接传递，来自 create_resource 的 labware）
     well_names: ["A1", "A3", "A5"]（来自 reagent 的 well 数组）
@@ -76,6 +80,13 @@ transfer_liquid:
     输入: sources -> sources_identifier, targets -> targets_identifier
     输出: sources -> sources_out, targets -> targets_out
 
+==================== 设备名配置 (device_name) ====================
+
+每个节点都有 device_name 字段，指定在哪个设备上执行:
+- create_resource: device_name = "host_node"（固定）
+- set_liquid_from_plate: device_name = "PRCXI"（可配置，见 DEVICE_NAME_DEFAULT）
+- transfer_liquid 等动作: device_name = "PRCXI"（可配置，见 DEVICE_NAME_DEFAULT）
+
 ==================== 校验规则 ====================
 
 - 检查 sources/targets 是否在 reagent 中定义
@@ -96,6 +107,13 @@ Json = Dict[str, Any]
 
 
 # ==================== 默认配置 ====================
+
+# 设备名配置
+DEVICE_NAME_HOST = "host_node"  # create_resource 固定在 host_node 上执行
+DEVICE_NAME_DEFAULT = "PRCXI"  # transfer_liquid, set_liquid_from_plate 等动作的默认设备名
+
+# 节点类型
+NODE_TYPE_DEFAULT = "ILab"  # 所有节点的默认类型
 
 # create_resource 节点默认参数
 CREATE_RESOURCE_DEFAULTS = {
@@ -367,6 +385,21 @@ def build_protocol_graph(
                 "res_id": res_id,
             }
 
+    # 创建 Group 节点，包含所有 create_resource 节点
+    group_node_id = str(uuid.uuid4())
+    G.add_node(
+        group_node_id,
+        name="Resources Group",
+        type="Group",
+        parent_uuid="",
+        lab_node_type="Device",
+        template_name="",
+        resource_name="",
+        footer="",
+        minimized=True,
+        param=None,
+    )
+
     # 为每个唯一的 slot 创建 create_resource 节点
     res_index = 0
     last_create_resource_id = None
@@ -383,6 +416,10 @@ def build_protocol_graph(
             description=f"Create plate on slot {slot}",
             lab_node_type="Labware",
             footer="create_resource-host_node",
+            device_name=DEVICE_NAME_HOST,
+            type=NODE_TYPE_DEFAULT,
+            parent_uuid=group_node_id,  # 指向 Group 节点
+            minimized=True,  # 折叠显示
             param={
                 "res_id": res_id,
                 "device_id": CREATE_RESOURCE_DEFAULTS["device_id"],
@@ -400,6 +437,21 @@ def build_protocol_graph(
         last_create_resource_id = node_id
 
     # ==================== 第二步：为每个 reagent 创建 set_liquid_from_plate 节点 ====================
+    # 创建 Group 节点，包含所有 set_liquid_from_plate 节点
+    set_liquid_group_id = str(uuid.uuid4())
+    G.add_node(
+        set_liquid_group_id,
+        name="SetLiquid Group",
+        type="Group",
+        parent_uuid="",
+        lab_node_type="Device",
+        template_name="",
+        resource_name="",
+        footer="",
+        minimized=True,
+        param=None,
+    )
+
     set_liquid_index = 0
     last_set_liquid_id = last_create_resource_id  # set_liquid_from_plate 连接在 create_resource 之后
 
@@ -430,6 +482,10 @@ def build_protocol_graph(
             description=f"Set liquid: {labware_id}",
             lab_node_type="Reagent",
             footer="set_liquid_from_plate-liquid_handler.prcxi",
+            device_name=DEVICE_NAME_DEFAULT,
+            type=NODE_TYPE_DEFAULT,
+            parent_uuid=set_liquid_group_id,  # 指向 Group 节点
+            minimized=True,  # 折叠显示
             param={
                 "plate": [],  # 通过连接传递
                 "well_names": wells,  # 孔位名数组，如 ["A1", "A3", "A5"]
@@ -544,9 +600,11 @@ def build_protocol_graph(
             if param_key in params:
                 params[param_key] = []
 
-        # 更新 step 的 param 和 footer
+        # 更新 step 的 param、footer、device_name 和 type
         step_copy = step.copy()
         step_copy["param"] = params
+        step_copy["device_name"] = DEVICE_NAME_DEFAULT  # 动作节点使用默认设备名
+        step_copy["type"] = NODE_TYPE_DEFAULT  # 节点类型
 
         # 如果有警告，修改 footer 添加警告标记（警告放前面）
         if warnings:

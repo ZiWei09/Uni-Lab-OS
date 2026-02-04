@@ -1581,7 +1581,7 @@ class BaseROS2DeviceNode(Node, Generic[T]):
                                     f"转换ResourceSlot列表参数 {arg_name} 失败: {e}\n{traceback.format_exc()}"
                                 )
                                 raise JsonCommandInitError(f"ResourceSlot列表参数转换失败: {arg_name}")
-
+            # todo: 默认反报送
             return function(**function_args)
         except KeyError as ex:
             raise JsonCommandInitError(
@@ -1614,8 +1614,8 @@ class BaseROS2DeviceNode(Node, Generic[T]):
         timeout = 30.0
         elapsed = 0.0
         while not future.done() and elapsed < timeout:
-            time.sleep(0.05)
-            elapsed += 0.05
+            time.sleep(0.02)
+            elapsed += 0.02
 
         if not future.done():
             raise Exception(f"资源查询超时: {uuids_list}")

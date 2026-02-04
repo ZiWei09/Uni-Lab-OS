@@ -52,6 +52,7 @@ from unilabos.devices.liquid_handling.liquid_handler_abstract import (
     SimpleReturn,
     SetLiquidReturn,
     SetLiquidFromPlateReturn,
+    TransferLiquidReturn,
 )
 from unilabos.registry.placeholder_type import ResourceSlot
 from unilabos.ros.nodes.base_device_node import BaseROS2DeviceNode
@@ -154,25 +155,29 @@ class PRCXI9300Plate(Plate):
         **kwargs,
     ):
         # 如果 ordered_items 不为 None，直接使用
+        items = None
+        ordering_param = None
         if ordered_items is not None:
             items = ordered_items
         elif ordering is not None:
             # 检查 ordering 中的值是否是字符串（从 JSON 反序列化时的情况）
             # 如果是字符串，说明这是位置名称，需要让 Plate 自己创建 Well 对象
             # 我们只传递位置信息（键），不传递值，使用 ordering 参数
-            if ordering and isinstance(next(iter(ordering.values()), None), str):
-                # ordering 的值是字符串，只使用键（位置信息）创建新的 OrderedDict
-                # 传递 ordering 参数而不是 ordered_items，让 Plate 自己创建 Well 对象
-                items = None
-                # 使用 ordering 参数，只包含位置信息（键）
-                ordering_param = collections.OrderedDict((k, None) for k in ordering.keys())
+            if ordering:
+                values = list(ordering.values())
+                value = values[0]
+                if isinstance(value, str):
+                    # ordering 的值是字符串，只使用键（位置信息）创建新的 OrderedDict
+                    # 传递 ordering 参数而不是 ordered_items，让 Plate 自己创建 Well 对象
+                    items = None
+                    # 使用 ordering 参数，只包含位置信息（键）
+                    ordering_param = collections.OrderedDict((k, None) for k in ordering.keys())
+                elif value is None:
+                    ordering_param = ordering
             else:
                 # ordering 的值已经是对象，可以直接使用
                 items = ordering
                 ordering_param = None
-        else:
-            items = None
-            ordering_param = None
 
         # 根据情况传递不同的参数
         if items is not None:
@@ -590,7 +595,7 @@ class PRCXI9300Handler(LiquidHandlerAbstract):
         return super().set_liquid(wells, liquid_names, volumes)
 
     def set_liquid_from_plate(
-        self, plate: ResourceSlot, well_names: list[str], liquid_names: list[str], volumes: list[float]
+        self, plate: List[ResourceSlot], well_names: list[str], liquid_names: list[str], volumes: list[float]
     ) -> SetLiquidFromPlateReturn:
         return super().set_liquid_from_plate(plate, well_names, liquid_names, volumes)
 
@@ -713,7 +718,7 @@ class PRCXI9300Handler(LiquidHandlerAbstract):
         mix_liquid_height: Optional[float] = None,
         delays: Optional[List[int]] = None,
         none_keys: List[str] = [],
-    ):
+    ) -> TransferLiquidReturn:
         return await super().transfer_liquid(
             sources,
             targets,
