@@ -64,7 +64,7 @@ class DeviceActionStatus:
 
 class TestResourceReturn(TypedDict):
     resources: List[List[ResourceDict]]
-    devices: List[DeviceSlot]
+    devices: List[Dict[str, Any]]
 
 
 class TestLatencyReturn(TypedDict):
