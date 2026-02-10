@@ -171,6 +171,12 @@ def parse_args():
         action="store_true",
         help="Disable sending update feedback to server",
     )
+    parser.add_argument(
+        "--test_mode",
+        action="store_true",
+        default=False,
+        help="Test mode: all actions simulate execution and return mock results without running real hardware",
+    )
     # workflow upload subcommand
     workflow_parser = subparsers.add_parser(
         "workflow_upload",
@@ -348,6 +354,9 @@ def main():
     BasicConfig.slave_no_host = args_dict.get("slave_no_host", False)
     BasicConfig.upload_registry = args_dict.get("upload_registry", False)
     BasicConfig.no_update_feedback = args_dict.get("no_update_feedback", False)
+    BasicConfig.test_mode = args_dict.get("test_mode", False)
+    if BasicConfig.test_mode:
+        print_status("启用测试模式：所有动作将模拟执行，不调用真实硬件", "warning")
     BasicConfig.communication_protocol = "websocket"
     machine_name = os.popen("hostname").read().strip()
     machine_name = "".join([c if c.isalnum() or c == "_" else "_" for c in machine_name])
