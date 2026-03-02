@@ -47,6 +47,7 @@ class ROS2WorkstationNode(BaseROS2DeviceNode):
         *,
         driver_instance: "WorkstationBase",
         device_id: str,
+        registry_name: str,
         device_uuid: str,
         status_types: Dict[str, Any],
         action_value_mappings: Dict[str, Any],
@@ -62,6 +63,7 @@ class ROS2WorkstationNode(BaseROS2DeviceNode):
         super().__init__(
             driver_instance=driver_instance,
             device_id=device_id,
+            registry_name=registry_name,
             device_uuid=device_uuid,
             status_types=status_types,
             action_value_mappings={**action_value_mappings, **self.protocol_action_mappings},
@@ -340,6 +342,8 @@ class ROS2WorkstationNode(BaseROS2DeviceNode):
                             plr = self.resource_tracker.figure_resource({"name": res_name}, try_mode=False)
                             # 获取父资源
                             res = self.resource_tracker.parent_resource(plr)
+                            if res is None:
+                                res = plr
                             if id(res) not in seen:
                                 seen.add(id(res))
                                 unique_resources.append(res)

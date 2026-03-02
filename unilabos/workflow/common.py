@@ -60,7 +60,11 @@
 ==================== 连接关系图 ====================
 
 控制流 (ready 端口串联):
-    create_resource_1 -> create_resource_2 -> ... -> set_liquid_1 -> set_liquid_2 -> ... -> transfer_liquid_1 -> transfer_liquid_2 -> ...
+    - create_resource 之间: 无 ready 连接
+    - set_liquid_from_plate 之间: 无 ready 连接
+    - create_resource 与 set_liquid_from_plate 之间: 无 ready 连接
+    - transfer_liquid 之间: 通过 ready 端口串联
+        transfer_liquid_1 -> transfer_liquid_2 -> transfer_liquid_3 -> ...
 
 物料流:
     [create_resource] --labware--> [set_liquid_from_plate] --output_wells--> [transfer_liquid] --sources_out/targets_out--> [下一个 transfer_liquid]
@@ -358,14 +362,16 @@ def build_protocol_graph(
     protocol_steps: List[Dict[str, Any]],
     workstation_name: str,
     action_resource_mapping: Optional[Dict[str, str]] = None,
+    labware_defs: Optional[List[Dict[str, Any]]] = None,
 ) -> WorkflowGraph:
     """统一的协议图构建函数，根据设备类型自动选择构建逻辑
 
     Args:
-        labware_info: labware 信息字典，格式为 {name: {slot, well, labware, ...}, ...}
+        labware_info: reagent 信息字典，格式为 {name: {slot, well}, ...}，用于 set_liquid 和 well 查找
         protocol_steps: 协议步骤列表
         workstation_name: 工作站名称
         action_resource_mapping: action 到 resource_name 的映射字典，可选
+        labware_defs: labware 定义列表，格式为 [{"name": "...", "slot": "1", "type": "lab_xxx"}, ...]
     """
     G = WorkflowGraph()
     resource_last_writer = {}  # reagent_name -> "node_id:port"
@@ -373,18 +379,7 @@ def build_protocol_graph(
 
     protocol_steps = refactor_data(protocol_steps, action_resource_mapping)
 
-    # ==================== 第一步：按 slot 去重创建 create_resource 节点 ====================
-    # 收集所有唯一的 slot
-    slots_info = {}  # slot -> {labware, res_id}
-    for labware_id, item in labware_info.items():
-        slot = str(item.get("slot", ""))
-        if slot and slot not in slots_info:
-            res_id = f"plate_slot_{slot}"
-            slots_info[slot] = {
-                "labware": item.get("labware", ""),
-                "res_id": res_id,
-            }
-
+    # ==================== 第一步：按 slot 创建 create_resource 节点 ====================
     # 创建 Group 节点，包含所有 create_resource 节点
     group_node_id = str(uuid.uuid4())
     G.add_node(
@@ -400,41 +395,41 @@ def build_protocol_graph(
         param=None,
     )
 
-    # 为每个唯一的 slot 创建 create_resource 节点
+    # 直接使用 JSON 中的 labware 定义，每个 slot 一条记录，type 即 class_name
     res_index = 0
-    last_create_resource_id = None
-    for slot, info in slots_info.items():
-        node_id = str(uuid.uuid4())
-        res_id = info["res_id"]
+    for lw in (labware_defs or []):
+        slot = str(lw.get("slot", ""))
+        if not slot or slot in slot_to_create_resource:
+            continue  # 跳过空 slot 或已处理的 slot
+
+        lw_name = lw.get("name", f"slot {slot}")
+        lw_type = lw.get("type", CREATE_RESOURCE_DEFAULTS["class_name"])
+        res_id = f"plate_slot_{slot}"
 
         res_index += 1
+        node_id = str(uuid.uuid4())
         G.add_node(
             node_id,
             template_name="create_resource",
             resource_name="host_node",
-            name=f"Plate {res_index}",
-            description=f"Create plate on slot {slot}",
+            name=lw_name,
+            description=f"Create {lw_name}",
             lab_node_type="Labware",
             footer="create_resource-host_node",
             device_name=DEVICE_NAME_HOST,
             type=NODE_TYPE_DEFAULT,
-            parent_uuid=group_node_id,  # 指向 Group 节点
-            minimized=True,  # 折叠显示
+            parent_uuid=group_node_id,
+            minimized=True,
             param={
                 "res_id": res_id,
                 "device_id": CREATE_RESOURCE_DEFAULTS["device_id"],
-                "class_name": CREATE_RESOURCE_DEFAULTS["class_name"],
+                "class_name": lw_type,
                 "parent": CREATE_RESOURCE_DEFAULTS["parent_template"].format(slot=slot),
                 "bind_locations": {"x": 0.0, "y": 0.0, "z": 0.0},
                 "slot_on_deck": slot,
             },
         )
         slot_to_create_resource[slot] = node_id
-
-        # create_resource 之间通过 ready 串联
-        if last_create_resource_id is not None:
-            G.add_edge(last_create_resource_id, node_id, source_port="ready", target_port="ready")
-        last_create_resource_id = node_id
 
     # ==================== 第二步：为每个 reagent 创建 set_liquid_from_plate 节点 ====================
     # 创建 Group 节点，包含所有 set_liquid_from_plate 节点
@@ -453,7 +448,6 @@ def build_protocol_graph(
     )
 
     set_liquid_index = 0
-    last_set_liquid_id = last_create_resource_id  # set_liquid_from_plate 连接在 create_resource 之后
 
     for labware_id, item in labware_info.items():
         # 跳过 Tip/Rack 类型
@@ -494,10 +488,7 @@ def build_protocol_graph(
             },
         )
 
-        # ready 连接：上一个节点 -> set_liquid_from_plate
-        if last_set_liquid_id is not None:
-            G.add_edge(last_set_liquid_id, node_id, source_port="ready", target_port="ready")
-        last_set_liquid_id = node_id
+        # set_liquid_from_plate 之间不需要 ready 连接
 
         # 物料流：create_resource 的 labware -> set_liquid_from_plate 的 input_plate
         create_res_node_id = slot_to_create_resource.get(slot)
@@ -507,7 +498,8 @@ def build_protocol_graph(
         # set_liquid_from_plate 的输出 output_wells 用于连接 transfer_liquid
         resource_last_writer[labware_id] = f"{node_id}:output_wells"
 
-    last_control_node_id = last_set_liquid_id
+    # transfer_liquid 之间通过 ready 串联，从 None 开始
+    last_control_node_id = None
 
     # 端口名称映射：JSON 字段名 -> 实际 handle key
     INPUT_PORT_MAPPING = {

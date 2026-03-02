@@ -5,6 +5,8 @@ from pydantic import BaseModel, field_serializer, field_validator, ValidationErr
 from pydantic import Field
 from typing import List, Tuple, Any, Dict, Literal, Optional, cast, TYPE_CHECKING, Union
 
+from typing_extensions import TypedDict
+
 from unilabos.resources.plr_additional_res_reg import register
 from unilabos.utils.log import logger
 
@@ -14,6 +16,32 @@ if TYPE_CHECKING:
 
 
 EXTRA_CLASS = "unilabos_resource_class"
+EXTRA_SAMPLE_UUID = "sample_uuid"
+EXTRA_UNILABOS_SAMPLE_UUID = "unilabos_sample_uuid"
+
+# 函数参数名常量 - 用于自动注入 sample_uuids 列表
+PARAM_SAMPLE_UUIDS = "sample_uuids"
+
+# JSON Command 中的系统参数字段名
+JSON_UNILABOS_PARAM = "unilabos_param"
+
+# 返回值中的 samples 字段名
+RETURN_UNILABOS_SAMPLES = "unilabos_samples"
+
+# sample_uuids 参数类型 (用于 virtual bench 等设备添加 sample_uuids 参数)
+SampleUUIDsType = Dict[str, Optional["PLRResource"]]
+
+
+class LabSample(TypedDict):
+    sample_uuid: str
+    oss_path: str
+    extra: Dict[str, Any]
+
+
+class ResourceDictPositionSizeType(TypedDict):
+    depth: float
+    width: float
+    height: float
 
 
 class ResourceDictPositionSize(BaseModel):
@@ -22,16 +50,38 @@ class ResourceDictPositionSize(BaseModel):
     height: float = Field(description="Height", default=0.0)  # y
 
 
+class ResourceDictPositionScaleType(TypedDict):
+    x: float
+    y: float
+    z: float
+
+
 class ResourceDictPositionScale(BaseModel):
     x: float = Field(description="x scale", default=0.0)
     y: float = Field(description="y scale", default=0.0)
     z: float = Field(description="z scale", default=0.0)
 
 
+class ResourceDictPositionObjectType(TypedDict):
+    x: float
+    y: float
+    z: float
+
+
 class ResourceDictPositionObject(BaseModel):
     x: float = Field(description="X coordinate", default=0.0)
     y: float = Field(description="Y coordinate", default=0.0)
     z: float = Field(description="Z coordinate", default=0.0)
+
+
+class ResourceDictPositionType(TypedDict):
+    size: ResourceDictPositionSizeType
+    scale: ResourceDictPositionScaleType
+    layout: Literal["2d", "x-y", "z-y", "x-z"]
+    position: ResourceDictPositionObjectType
+    position3d: ResourceDictPositionObjectType
+    rotation: ResourceDictPositionObjectType
+    cross_section_type: Literal["rectangle", "circle", "rounded_rectangle"]
 
 
 class ResourceDictPosition(BaseModel):
@@ -50,6 +100,24 @@ class ResourceDictPosition(BaseModel):
     cross_section_type: Literal["rectangle", "circle", "rounded_rectangle"] = Field(
         description="Cross section type", default="rectangle"
     )
+
+
+class ResourceDictType(TypedDict):
+    id: str
+    uuid: str
+    name: str
+    description: str
+    resource_schema: Dict[str, Any]
+    model: Dict[str, Any]
+    icon: str
+    parent_uuid: Optional[str]
+    parent: Optional["ResourceDictType"]
+    type: Union[Literal["device"], str]
+    klass: str
+    pose: ResourceDictPositionType
+    config: Dict[str, Any]
+    data: Dict[str, Any]
+    extra: Dict[str, Any]
 
 
 # 统一的资源字典模型，parent 自动序列化为 parent_uuid，children 不序列化
@@ -530,6 +598,7 @@ class ResourceTreeSet(object):
                 plr_resource = sub_cls.deserialize(plr_dict, allow_marshal=True)
                 from pylabrobot.resources import Coordinate
                 from pylabrobot.serializer import deserialize
+
                 location = cast(Coordinate, deserialize(plr_dict["location"]))
                 plr_resource.location = location
                 plr_resource.load_all_state(all_states)
