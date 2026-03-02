@@ -924,6 +924,14 @@ class BaseROS2DeviceNode(Node, Generic[T]):
                                 parent_appended = True
 
                 # 加载状态
+                # noinspection PyProtectedMember
+                original_instance._size_x = plr_resource._size_x
+                # noinspection PyProtectedMember
+                original_instance._size_y = plr_resource._size_y
+                # noinspection PyProtectedMember
+                original_instance._size_z = plr_resource._size_z
+                # noinspection PyProtectedMember
+                original_instance._local_size_z = plr_resource._local_size_z
                 original_instance.location = plr_resource.location
                 original_instance.rotation = plr_resource.rotation
                 original_instance.barcode = plr_resource.barcode
@@ -984,7 +992,7 @@ class BaseROS2DeviceNode(Node, Generic[T]):
                         ].call_async(
                             r
                         )  # type: ignore
-                        self.lab_logger().info(f"确认资源云端 Add 结果: {response.response}")
+                        self.lab_logger().trace(f"确认资源云端 Add 结果: {response.response}")
                         results.append(result)
                     elif action == "update":
                         if tree_set is None:
