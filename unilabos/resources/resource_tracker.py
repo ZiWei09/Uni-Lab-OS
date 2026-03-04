@@ -840,14 +840,27 @@ class ResourceTreeSet(object):
                                 f"从远端同步了 {added_count} 个物料子树"
                             )
                     else:
-                        # 情况2: 二级是物料（不是 device）
-                        if remote_child_name not in local_children_map:
-                            # 引入整个子树
-                            remote_child.res_content.parent = local_device.res_content
-                            local_device.children.append(remote_child)
-                            logger.info(f"Device '{remote_root_id}': 从远端同步物料子树 '{remote_child_name}'")
-                        else:
-                            logger.info(f"物料 '{remote_root_id}/{remote_child_name}' 已存在，跳过")
+                        # 二级物料已存在，比较三级子节点是否缺失
+                        local_material = local_children_map[remote_child_name]
+                        local_material_children_map = {child.res_content.name: child for child in
+                                                       local_material.children}
+                        added_count = 0
+                        for remote_sub in remote_child.children:
+                            remote_sub_name = remote_sub.res_content.name
+                            if remote_sub_name not in local_material_children_map:
+                                remote_sub.res_content.parent = local_material.res_content
+                                local_material.children.append(remote_sub)
+                                added_count += 1
+                            else:
+                                logger.info(
+                                    f"物料 '{remote_root_id}/{remote_child_name}/{remote_sub_name}' "
+                                    f"已存在，跳过"
+                                )
+                        if added_count > 0:
+                            logger.info(
+                                f"物料 '{remote_root_id}/{remote_child_name}': "
+                                f"从远端同步了 {added_count} 个子物料"
+                            )
             else:
                 # 情况1: 一级节点是物料（不是 device）
                 # 检查是否已存在
