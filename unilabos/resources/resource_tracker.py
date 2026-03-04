@@ -75,15 +75,6 @@ class ResourceDictPositionObject(BaseModel):
     z: float = Field(description="Z coordinate", default=0.0)
 
 
-class ResourceDictPoseExtraObjectType(BaseModel):
-    z_index: int
-
-
-class ResourceDictPoseExtraObject(BaseModel):
-    z_index: Optional[int] = Field(alias="zIndex", default=None)
-    is_flap_y: Optional[bool] = Field(alias="isFlapY", default=None)
-
-
 class ResourceDictPositionType(TypedDict):
     size: ResourceDictPositionSizeType
     scale: ResourceDictPositionScaleType
@@ -110,7 +101,7 @@ class ResourceDictPosition(BaseModel):
     cross_section_type: Literal["rectangle", "circle", "rounded_rectangle"] = Field(
         description="Cross section type", default="rectangle"
     )
-    extra: Optional[ResourceDictPoseExtraObject] = Field(description="Extra data", default=None)
+    extra: Optional[Dict[str, Any]] = Field(description="Extra data", default=None)
 
 
 class ResourceDictType(TypedDict):
