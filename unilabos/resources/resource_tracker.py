@@ -81,6 +81,7 @@ class ResourceDictPoseExtraObjectType(BaseModel):
 
 class ResourceDictPoseExtraObject(BaseModel):
     z_index: Optional[int] = Field(alias="zIndex", default=None)
+    is_flap_y: Optional[bool] = Field(alias="isFlapY", default=None)
 
 
 class ResourceDictPositionType(TypedDict):
