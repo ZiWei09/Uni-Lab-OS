@@ -4,6 +4,8 @@ import threading
 import time
 import traceback
 import uuid
+
+from unilabos.utils.tools import fast_dumps_str as _fast_dumps_str, fast_loads as _fast_loads
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional, Dict, Any, List, ClassVar, Set, Union
 
@@ -24,7 +26,7 @@ from unilabos_msgs.srv import (
 from unilabos_msgs.srv._serial_command import SerialCommand_Request, SerialCommand_Response
 from unique_identifier_msgs.msg import UUID
 
-from unilabos.registry.decorators import device
+from unilabos.registry.decorators import device, action, NodeType
 from unilabos.registry.placeholder_type import ResourceSlot, DeviceSlot
 from unilabos.registry.registry import lab_registry
 from unilabos.resources.container import RegularContainer
@@ -313,7 +315,9 @@ class HostNode(BaseROS2DeviceNode):
                 callback_group=self.callback_group,
             ),
         }  # 用来存储多个ActionClient实例
-        self._action_value_mappings: Dict[str, Dict] = {}  # device_id -> action_value_mappings(本地+远程设备统一存储)
+        self._action_value_mappings: Dict[str, Dict] = {
+            device_id: self._action_value_mappings
+        }  # device_id -> action_value_mappings(本地+远程设备统一存储)
         self._slave_registry_configs: Dict[str, Dict] = {}  # registry_name -> registry_config(含action_value_mappings)
         self._goals: Dict[str, Any] = {}  # 用来存储多个目标的状态
         self._online_devices: Set[str] = {f"{self.namespace}/{device_id}"}  # 用于跟踪在线设备
@@ -616,22 +620,17 @@ class HostNode(BaseROS2DeviceNode):
                 }
             )
         ]
-
         response: List[str] = await self.create_resource_detailed(
             resources, device_ids, bind_parent_id, bind_location, other_calling_param
         )
 
-        try:
-            assert len(response) == 1, "Create Resource应当只返回一个结果"
-            for i in response:
-                res = json.loads(i)
-                if "suc" in res:
-                    raise ValueError(res.get("error"))
-                return res
-        except Exception as ex:
-            pass
-        _n = "\n"
-        raise ValueError(f"创建资源时失败！\n{_n.join(response)}")
+        assert len(response) == 1, "Create Resource应当只返回一个结果"
+        for i in response:
+            res = json.loads(i)
+            if "suc" in res and not res["suc"]:
+                raise ValueError(res.get("error", "未知错误"))
+            return res
+        raise ValueError(f"创建资源时失败！响应为空")
 
     def initialize_device(self, device_id: str, device_config: ResourceDictInstance) -> None:
         """
@@ -1166,7 +1165,7 @@ class HostNode(BaseROS2DeviceNode):
                 else:
                     physical_setup_graph.nodes[resource_dict["id"]]["data"].update(resource_dict.get("data", {}))
 
-        response.response = json.dumps(uuid_mapping) if success else "FAILED"
+        response.response = _fast_dumps_str(uuid_mapping) if success else "FAILED"
         self.lab_logger().info(f"[Host Node-Resource] Resource tree add completed, success: {success}")
 
     async def _resource_tree_action_get_callback(self, data: dict, response: SerialCommand_Response):  # OK
@@ -1176,6 +1175,7 @@ class HostNode(BaseROS2DeviceNode):
 
         resource_response = http_client.resource_tree_get(uuid_list, with_children)
         response.response = json.dumps(resource_response)
+        self.lab_logger().trace(f"[Host Node-Resource] Resource tree get request callback {response.response}")
 
     async def _resource_tree_action_remove_callback(self, data: dict, response: SerialCommand_Response):
         """
@@ -1228,9 +1228,26 @@ class HostNode(BaseROS2DeviceNode):
         """
         try:
             # 解析请求数据
-            data = json.loads(request.command)
+            data = _fast_loads(request.command)
             action = data["action"]
-            self.lab_logger().info(f"[Host Node-Resource] Resource tree {action} request received")
+            inner = data.get("data", {})
+            if action == "add":
+                mount_uuid = inner.get("mount_uuid", "?")[:8] if isinstance(inner, dict) else "?"
+                tree_data = inner.get("data", []) if isinstance(inner, dict) else inner
+                node_count = len(tree_data) if isinstance(tree_data, list) else "?"
+                source = f"mount={mount_uuid}.. nodes≈{node_count}"
+            elif action in ("get", "remove"):
+                uid_list = inner.get("data", inner) if isinstance(inner, dict) else inner
+                source = f"uuids={len(uid_list) if isinstance(uid_list, list) else '?'}"
+            elif action == "update":
+                tree_data = inner.get("data", []) if isinstance(inner, dict) else inner
+                node_count = len(tree_data) if isinstance(tree_data, list) else "?"
+                source = f"nodes≈{node_count}"
+            else:
+                source = ""
+            self.lab_logger().info(
+                f"[Host Node-Resource] Resource tree {action} request received ({source})"
+            )
             data = data["data"]
             if action == "add":
                 await self._resource_tree_action_add_callback(data, response)
@@ -1620,6 +1637,19 @@ class HostNode(BaseROS2DeviceNode):
             "status": "success",
         }
         return res
+
+    @action(always_free=True, node_type=NodeType.MANUAL_CONFIRM, placeholder_keys={
+        "assignee_user_ids": "unilabos_manual_confirm"
+    }, goal_default={
+        "timeout_seconds": 3600,
+        "assignee_user_ids": []
+    })
+    def manual_confirm(self, timeout_seconds: int, assignee_user_ids: list[str], **kwargs) -> dict:
+        """
+        timeout_seconds: 超时时间（秒），默认3600秒
+        修改的结果无效，是只读的
+        """
+        return kwargs
 
     def test_resource(
         self,
