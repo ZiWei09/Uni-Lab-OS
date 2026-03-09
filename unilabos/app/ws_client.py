@@ -466,6 +466,7 @@ class MessageProcessor:
                 async with websockets.connect(
                     self.websocket_url,
                     ssl=ssl_context,
+                    open_timeout=20,
                     ping_interval=WSConfig.ping_interval,
                     ping_timeout=10,
                     additional_headers={
@@ -497,6 +498,18 @@ class MessageProcessor:
             except websockets.exceptions.ConnectionClosed:
                 logger.warning("[MessageProcessor] Connection closed")
                 self.connected = False
+            except TimeoutError:
+                logger.warning(
+                    f"[MessageProcessor] Connection timeout (attempt {self.reconnect_count + 1}), "
+                    f"server may be temporarily unavailable"
+                )
+                self.connected = False
+            except websockets.exceptions.InvalidStatus as e:
+                logger.warning(
+                    f"[MessageProcessor] Server returned unexpected HTTP status {e.response.status_code}, "
+                    f"WebSocket endpoint may not be ready yet"
+                )
+                self.connected = False
             except Exception as e:
                 logger.error(f"[MessageProcessor] Connection error: {str(e)}")
                 logger.error(traceback.format_exc())
@@ -505,18 +518,19 @@ class MessageProcessor:
                 self.websocket = None
 
             # 重连逻辑
-            if self.is_running and self.reconnect_count < WSConfig.max_reconnect_attempts:
+            if not self.is_running:
+                break
+            if self.reconnect_count < WSConfig.max_reconnect_attempts:
                 self.reconnect_count += 1
+                backoff = min(WSConfig.reconnect_interval * (2 ** (self.reconnect_count - 1)), 60)
                 logger.info(
-                    f"[MessageProcessor] Reconnecting in {WSConfig.reconnect_interval}s "
+                    f"[MessageProcessor] Reconnecting in {backoff}s "
                     f"(attempt {self.reconnect_count}/{WSConfig.max_reconnect_attempts})"
                 )
-                await asyncio.sleep(WSConfig.reconnect_interval)
-            elif self.reconnect_count >= WSConfig.max_reconnect_attempts:
+                await asyncio.sleep(backoff)
+            else:
                 logger.error("[MessageProcessor] Max reconnection attempts reached")
                 break
-            else:
-                self.reconnect_count -= 1
 
     async def _message_handler(self):
         """处理接收到的消息"""
