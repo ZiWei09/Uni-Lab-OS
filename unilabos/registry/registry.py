@@ -107,7 +107,7 @@ class Registry:
         raw_create_resource_schema = ros_action_to_json_schema(
             self.ResourceCreateFromOuterEasy, "用于创建或更新物料资源，每次传入一个物料信息。"
         )
-        raw_create_resource_schema["properties"]["result"] = create_resource_schema["properties"]["result"]
+        raw_create_resource_schema["properties"]["result"]["properties"]["return_info"] = create_resource_schema["properties"]["result"]
 
         self.device_type_registry.update(
             {
