@@ -68,6 +68,12 @@ class TestResourceReturn(TypedDict):
     unilabos_samples: List[LabSample]
 
 
+class CreateResourceReturn(TypedDict):
+    created_resource_tree: List[List[ResourceDict]]
+    liquid_input_resource_tree: List[Dict[str, Any]]
+    unilabos_samples: List[LabSample]
+
+
 class TestLatencyReturn(TypedDict):
     """test_latency方法的返回值类型"""
 
@@ -556,7 +562,7 @@ class HostNode(BaseROS2DeviceNode):
         liquid_type: list[str] = [],
         liquid_volume: list[int] = [],
         slot_on_deck: str = "",
-    ):
+    ) -> CreateResourceReturn:
         # 暂不支持多对同名父子同时存在
         res_creation_input = {
             "id": res_id.split("/")[-1],
