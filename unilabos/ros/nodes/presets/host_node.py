@@ -615,6 +615,8 @@ class HostNode(BaseROS2DeviceNode):
             assert len(response) == 1, "Create Resource应当只返回一个结果"
             for i in response:
                 res = json.loads(i)
+                if "suc" in res:
+                    raise ValueError(res.get("error"))
                 return res
         except Exception as ex:
             pass
