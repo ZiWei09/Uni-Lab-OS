@@ -634,7 +634,7 @@ class PRCXI9300Handler(LiquidHandlerAbstract):
 
     def __init__(
         self,
-        deck: Deck,
+        deck: PRCXI9300Deck,
         host: str,
         port: int,
         timeout: float,
@@ -648,11 +648,11 @@ class PRCXI9300Handler(LiquidHandlerAbstract):
         is_9320=False,
     ):
         tablets_info = []
-        count = 0
-        for child in deck.children:
+        for site_id in range(len(deck.sites)):
+            child = deck._get_site_resource(site_id)
             # 如果放其他类型的物料，是不可以的
             if hasattr(child, "_unilabos_state") and "Material" in child._unilabos_state:
-                number = int(child.name.replace("T", ""))
+                number = site_id + 1
                 tablets_info.append(
                     WorkTablets(
                         Number=number, Code=f"T{number}", Material=child._unilabos_state["Material"]

@@ -65,13 +65,13 @@ class DeviceActionStatus:
 class TestResourceReturn(TypedDict):
     resources: List[List[ResourceDict]]
     devices: List[Dict[str, Any]]
-    unilabos_samples: List[LabSample]
+    # unilabos_samples: List[LabSample]
 
 
 class CreateResourceReturn(TypedDict):
     created_resource_tree: List[List[ResourceDict]]
     liquid_input_resource_tree: List[Dict[str, Any]]
-    unilabos_samples: List[LabSample]
+    # unilabos_samples: List[LabSample]
 
 
 class TestLatencyReturn(TypedDict):
