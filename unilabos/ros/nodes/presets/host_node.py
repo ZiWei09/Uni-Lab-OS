@@ -65,7 +65,13 @@ class DeviceActionStatus:
 class TestResourceReturn(TypedDict):
     resources: List[List[ResourceDict]]
     devices: List[Dict[str, Any]]
-    unilabos_samples: List[LabSample]
+    # unilabos_samples: List[LabSample]
+
+
+class CreateResourceReturn(TypedDict):
+    created_resource_tree: List[List[ResourceDict]]
+    liquid_input_resource_tree: List[Dict[str, Any]]
+    # unilabos_samples: List[LabSample]
 
 
 class TestLatencyReturn(TypedDict):
@@ -556,7 +562,7 @@ class HostNode(BaseROS2DeviceNode):
         liquid_type: list[str] = [],
         liquid_volume: list[int] = [],
         slot_on_deck: str = "",
-    ):
+    ) -> CreateResourceReturn:
         # 暂不支持多对同名父子同时存在
         res_creation_input = {
             "id": res_id.split("/")[-1],
@@ -609,6 +615,8 @@ class HostNode(BaseROS2DeviceNode):
             assert len(response) == 1, "Create Resource应当只返回一个结果"
             for i in response:
                 res = json.loads(i)
+                if "suc" in res:
+                    raise ValueError(res.get("error"))
                 return res
         except Exception as ex:
             pass

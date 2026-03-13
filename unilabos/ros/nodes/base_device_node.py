@@ -569,9 +569,11 @@ class BaseROS2DeviceNode(Node, Generic[T]):
                 future.add_done_callback(done_cb)
             except ImportError:
                 self.lab_logger().error("Host请求添加物料时，本环境并不存在pylabrobot")
+                res.response = get_result_info_str(traceback.format_exc(), False, {})
             except Exception as e:
                 self.lab_logger().error("Host请求添加物料时出错")
                 self.lab_logger().error(traceback.format_exc())
+                res.response = get_result_info_str(traceback.format_exc(), False, {})
             return res
 
         # noinspection PyTypeChecker
