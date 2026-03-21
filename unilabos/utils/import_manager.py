@@ -29,7 +29,7 @@ from ast import Constant
 
 from unilabos.resources.resource_tracker import PARAM_SAMPLE_UUIDS
 from unilabos.utils import logger
-from unilabos.utils.decorator import is_not_action, is_always_free
+from unilabos.registry.decorators import is_not_action, is_always_free
 
 
 class ImportManager:
@@ -481,10 +481,16 @@ class ImportManager:
         return False
 
     def _is_always_free_method(self, node: ast.FunctionDef) -> bool:
-        """检查是否是@always_free装饰的方法"""
+        """检查是否是@always_free装饰的方法，或 @action(always_free=True) 装饰的方法"""
         for decorator in node.decorator_list:
-            if isinstance(decorator, ast.Name) and decorator.id == "always_free":
-                return True
+            # 检查 @action(always_free=True)
+            if isinstance(decorator, ast.Call):
+                func = decorator.func
+                if isinstance(func, ast.Name) and func.id == "action":
+                    for keyword in decorator.keywords:
+                        if keyword.arg == "always_free":
+                            if isinstance(keyword.value, Constant) and keyword.value.value is True:
+                                return True
         return False
 
     def _get_property_name_from_setter(self, node: ast.FunctionDef) -> str:

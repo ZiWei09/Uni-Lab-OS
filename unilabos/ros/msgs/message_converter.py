@@ -11,6 +11,7 @@ from io import StringIO
 from typing import Iterable, Any, Dict, Type, TypeVar, Union
 
 import yaml
+from msgcenterpy.instances.ros2_instance import ROS2MessageInstance
 from pydantic import BaseModel
 from dataclasses import asdict, is_dataclass
 
@@ -727,46 +728,9 @@ def ros_message_to_json_schema(msg_class: Any, field_name: str) -> Dict[str, Any
     Returns:
         对应的 JSON Schema 定义
     """
-    schema = {"type": "object", "properties": {}, "required": []}
-
-    # 优先使用字段名作为标题，否则使用类名
+    schema = ROS2MessageInstance(msg_class()).get_json_schema()
     schema["title"] = field_name
-
-    # 获取消息的字段和字段类型
-    try:
-        for ind, slot_info in enumerate(msg_class._fields_and_field_types.items()):
-            slot_name, slot_type = slot_info
-            type_info = msg_class.SLOT_TYPES[ind]
-            field_schema = ros_field_type_to_json_schema(type_info, slot_name)
-            schema["properties"][slot_name] = field_schema
-            schema["required"].append(slot_name)
-        # if hasattr(msg_class, 'get_fields_and_field_types'):
-        #     fields_and_types = msg_class.get_fields_and_field_types()
-        #
-        #     for field_name, field_type in fields_and_types.items():
-        #         # 将 ROS 字段类型转换为 JSON Schema
-        #         field_schema = ros_field_type_to_json_schema(field_type)
-        #
-        #         schema['properties'][field_name] = field_schema
-        #         schema['required'].append(field_name)
-        # elif hasattr(msg_class, '__slots__') and hasattr(msg_class, '_fields_and_field_types'):
-        #     # 直接从实例属性获取
-        #     for field_name in msg_class.__slots__:
-        #         # 移除前导下划线（如果有）
-        #         clean_name = field_name[1:] if field_name.startswith('_') else field_name
-        #
-        #         # 从 _fields_and_field_types 获取类型
-        #         if clean_name in msg_class._fields_and_field_types:
-        #             field_type = msg_class._fields_and_field_types[clean_name]
-        #             field_schema = ros_field_type_to_json_schema(field_type)
-        #
-        #             schema['properties'][clean_name] = field_schema
-        #             schema['required'].append(clean_name)
-    except Exception as e:
-        # 如果获取字段类型失败，添加错误信息
-        schema["description"] = f"解析消息字段时出错: {str(e)}"
-        logger.error(f"解析 {msg_class.__name__} 消息字段失败: {str(e)}")
-
+    schema.pop("description")
     return schema
 
 
