@@ -181,21 +181,6 @@ class Registry:
                 "module": "unilabos.ros.nodes.presets.host_node:HostNode",
                 "status_types": {},
                 "action_value_mappings": {
-                    "create_resource_detailed": {
-                        "type": ResourceCreateFromOuter,
-                        "goal": {
-                            "resources": "resources",
-                            "device_ids": "device_ids",
-                            "bind_parent_ids": "bind_parent_ids",
-                            "bind_locations": "bind_locations",
-                            "other_calling_params": "other_calling_params",
-                        },
-                        "feedback": {},
-                        "result": {"success": "success"},
-                        "schema": ros_action_to_json_schema(ResourceCreateFromOuter),
-                        "goal_default": ROS2MessageInstance(ResourceCreateFromOuter.Goal()).get_python_dict(),
-                        "handles": {},
-                    },
                     "create_resource": {
                         "type": ResourceCreateFromOuterEasy,
                         "goal": {
@@ -713,7 +698,7 @@ class Registry:
     # ------------------------------------------------------------------
 
     def _add_builtin_actions(self, device_config: Dict[str, Any], device_id: str):
-        """为设备添加内置的驱动命令动作"""
+        """为设备添加内置的驱动命令动作（运行时需要，上报注册表时会过滤掉）"""
         str_single_input = self._replace_type_with_class("StrSingleInput", device_id, "内置动作")
         for additional_action in ["_execute_driver_command", "_execute_driver_command_async"]:
             try:

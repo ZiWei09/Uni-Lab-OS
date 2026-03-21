@@ -182,11 +182,12 @@ API 模板结构：
 - ak/sk → AUTH, --addr → BASE URL
 
 ## Session State
-- lab_uuid, device_name
+- lab_uuid（通过 API #1 自动匹配，不要问用户）, device_name
 
 ## API Endpoints (10 个)
 # 注意：
-# - #1 获取 lab 列表需加 ?page=1&page_size=100
+# - #1 获取 lab 列表 + 自动匹配 lab_uuid（遍历 is_admin 的 lab，
+#   调用 /lab/info/{uuid} 比对 access_key == ak）
 # - #2 创建工作流用 POST /lab/workflow
 # - #10 获取资源树路径含 lab_uuid: /lab/material/download/{lab_uuid}
 
