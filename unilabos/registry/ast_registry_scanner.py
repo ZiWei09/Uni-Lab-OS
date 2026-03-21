@@ -839,24 +839,39 @@ def _extract_class_body(
         if _has_decorator(item, "not_action") and _is_registry_decorator("not_action", import_map):
             continue
 
+        # --- get_ 前缀且无额外参数（仅 self）→ status property ---
+        if method_name.startswith("get_"):
+            real_args = [a for a in item.args.args if a.arg != "self"]
+            if len(real_args) == 0:
+                prop_name = method_name[4:]
+                return_type = _get_annotation_str(item.returns, import_map)
+                if prop_name not in result["status_properties"]:
+                    result["status_properties"][prop_name] = {
+                        "name": prop_name,
+                        "return_type": return_type,
+                        "is_property": False,
+                        "topic_config": None,
+                    }
+                continue
+
         # --- Public method without @action => auto-action ---
-        # Skip lifecycle / dunder methods that should never be auto-actions
         if method_name in ("post_init", "__str__", "__repr__"):
             continue
-
-        # 'close' and 'cleanup' could be actions in some drivers -- keep them
 
         method_params = _extract_method_params(item, import_map)
         return_type = _get_annotation_str(item.returns, import_map)
         is_async = isinstance(item, ast.AsyncFunctionDef)
         method_doc = ast.get_docstring(item)
 
-        result["auto_methods"][method_name] = {
+        auto_entry: dict = {
             "params": method_params,
             "return_type": return_type,
             "is_async": is_async,
             "docstring": method_doc,
         }
+        if _has_decorator(item, "always_free") and _is_registry_decorator("always_free", import_map):
+            auto_entry["always_free"] = True
+        result["auto_methods"][method_name] = auto_entry
 
     return result
 

@@ -248,6 +248,12 @@ def parse_args():
         help="Run in check mode for CI: validates registry imports and ensures no file changes",
     )
     parser.add_argument(
+        "--complete_registry",
+        action="store_true",
+        default=False,
+        help="Complete and rewrite YAML registry files using AST analysis results",
+    )
+    parser.add_argument(
         "--no_update_feedback",
         action="store_true",
         help="Disable sending update feedback to server",
@@ -491,11 +497,13 @@ def main():
     # Step 0: AST 分析优先 + YAML 注册表加载
     # check_mode 和 upload_registry 都会执行实际 import 验证
     devices_dirs = args_dict.get("devices", None)
+    complete_registry = args_dict.get("complete_registry", False) or check_mode
     lab_registry = build_registry(
         registry_paths=args_dict["registry_path"],
         devices_dirs=devices_dirs,
         upload_registry=BasicConfig.upload_registry,
         check_mode=check_mode,
+        complete_registry=complete_registry,
     )
 
     # Check mode: 注册表验证完成后直接退出

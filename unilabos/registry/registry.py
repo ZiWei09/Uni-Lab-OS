@@ -47,6 +47,7 @@ from unilabos.registry.utils import (
     normalize_ast_action_handles,
     wrap_action_schema,
     preserve_field_descriptions,
+    strip_ros_descriptions,
     resolve_method_params_via_import,
     SIMPLE_TYPE_MAP,
 )
@@ -110,7 +111,7 @@ class Registry:
     # 统一入口
     # ------------------------------------------------------------------
 
-    def setup(self, devices_dirs=None, upload_registry=False):
+    def setup(self, devices_dirs=None, upload_registry=False, complete_registry=False):
         """统一构建注册表入口。"""
         if self._setup_called:
             logger.critical("[UniLab Registry] setup方法已被调用过，不允许多次调用")
@@ -132,9 +133,9 @@ class Registry:
             sys_path = path.parent
             logger.trace(f"[UniLab Registry] Path {i+1}/{len(self.registry_paths)}: {sys_path}")
             sys.path.append(str(sys_path))
-            self.load_device_types(path)
+            self.load_device_types(path, complete_registry=complete_registry)
             if BasicConfig.enable_resource_load:
-                self.load_resource_types(path, upload_registry)
+                self.load_resource_types(path, upload_registry, complete_registry=complete_registry)
             else:
                 logger.warning(
                     "[UniLab Registry] 资源加载已禁用 (enable_resource_load=False)，跳过资源注册表加载"
@@ -271,17 +272,11 @@ class Registry:
         执行 AST 静态扫描，从 Python 代码中提取 @device / @resource 装饰器元数据。
         无需 import 任何驱动模块，速度极快。
 
-        启用文件级缓存：对每个 .py 文件记录 MD5/size/mtime，未变化的文件直接
-        复用上次的扫描结果，大幅减少重复启动时的耗时。
-
-        扫描策略：
-        - 默认扫描 unilabos 包所在目录（即 unilabos 的父目录）
-        - 如果传入 devices_dirs，额外扫描这些目录（并将其父目录加入 sys.path）
+        所有缓存（AST 扫描 / build 结果 / config_info）统一存放在
+        registry_cache.pkl 一个文件中，删除即可完全重置。
         """
         import time as _time
-        from unilabos.registry.ast_registry_scanner import (
-            scan_directory, load_scan_cache, save_scan_cache,
-        )
+        from unilabos.registry.ast_registry_scanner import scan_directory
 
         scan_t0 = _time.perf_counter()
 
@@ -293,11 +288,9 @@ class Registry:
             )
             own_executor = True
 
-        # 加载缓存
-        cache_path = None
-        if BasicConfig.working_dir:
-            cache_path = Path(BasicConfig.working_dir) / "ast_scan_cache.json"
-        cache = load_scan_cache(cache_path)
+        # ---- 统一缓存：一个 pkl 包含所有数据 ----
+        unified_cache = self._load_config_cache()
+        ast_cache = unified_cache.setdefault("_ast_scan", {"files": {}})
 
         # 默认：扫描 unilabos 包所在的父目录
         pkg_root = Path(__file__).resolve().parent.parent          # .../unilabos
@@ -322,7 +315,7 @@ class Registry:
         exclude_files = {"lab_resources.py"} if not BasicConfig.extra_resource else None
         scan_result = scan_directory(
             scan_root, python_path=python_path, executor=self._startup_executor,
-            exclude_files=exclude_files, cache=cache,
+            exclude_files=exclude_files, cache=ast_cache,
         )
         if exclude_files:
             logger.info(
@@ -337,7 +330,7 @@ class Registry:
         for d_path in extra_dirs:
             extra_result = scan_directory(
                 d_path, python_path=str(d_path.parent), executor=self._startup_executor,
-                cache=cache,
+                cache=ast_cache,
             )
             extra_stats = extra_result.pop("_cache_stats", {"hits": 0, "misses": 0, "total": 0})
             total_stats["hits"] += extra_stats["hits"]
@@ -361,10 +354,6 @@ class Registry:
                     )
                 scan_result.setdefault("resources", {})[rid] = rmeta
 
-        # 持久化缓存
-        cache["saved_at"] = _time.strftime("%Y-%m-%d %H:%M:%S")
-        save_scan_cache(cache_path, cache)
-
         # 缓存命中统计
         if total_stats["total"] > 0:
             logger.info(
@@ -378,10 +367,9 @@ class Registry:
 
         # build 结果缓存：当所有 AST 文件命中时跳过 _build_*_entry_from_ast
         all_ast_hit = total_stats["misses"] == 0 and total_stats["total"] > 0
-        build_cache = self._load_config_cache() if all_ast_hit else {}
-        cached_build = build_cache.get("_build_results")
+        cached_build = unified_cache.get("_build_results") if all_ast_hit else None
 
-        if all_ast_hit and cached_build:
+        if cached_build:
             cached_devices = cached_build.get("devices", {})
             cached_resources = cached_build.get("resources", {})
             if set(cached_devices) == set(ast_devices) and set(cached_resources) == set(ast_resources):
@@ -410,22 +398,17 @@ class Registry:
             build_elapsed = _time.perf_counter() - build_t0
             logger.info(f"[UniLab Registry] entry 构建耗时: {build_elapsed:.2f}s")
 
-            if not build_cache:
-                build_cache = self._load_config_cache()
-            build_cache["_build_results"] = {
+            unified_cache["_build_results"] = {
                 "devices": {k: v for k, v in self.device_type_registry.items() if k in ast_devices},
                 "resources": {k: v for k, v in self.resource_type_registry.items() if k in ast_resources},
             }
 
         # upload 模式下，利用线程池并行 import pylabrobot 资源并生成 config_info
         if upload_registry:
-            if build_cache:
-                self._populate_resource_config_info(config_cache=build_cache)
-                self._save_config_cache(build_cache)
-            else:
-                self._populate_resource_config_info()
-        elif build_cache and not cached_build:
-            self._save_config_cache(build_cache)
+            self._populate_resource_config_info(config_cache=unified_cache)
+
+        # 统一保存一次
+        self._save_config_cache(unified_cache)
 
         ast_device_count = len(ast_devices)
         ast_resource_count = len(ast_resources)
@@ -528,7 +511,6 @@ class Registry:
             else:
                 json_type = get_json_schema_type(param_type)
                 if json_type == "string" and param_type and param_type.lower() not in SIMPLE_TYPE_MAP:
-                    # 不在已知简单类型中的未知类型名，当 object 处理
                     prop_schema["type"] = "object"
                 else:
                     prop_schema["type"] = json_type
@@ -557,7 +539,8 @@ class Registry:
         return prop_schema
 
     def _generate_unilab_json_command_schema(
-        self, method_args: list, docstring: Optional[str] = None
+        self, method_args: list, docstring: Optional[str] = None,
+        import_map: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """根据方法参数和 docstring 生成 UniLabJsonCommand schema"""
         doc_info = parse_docstring(docstring)
@@ -589,7 +572,7 @@ class Registry:
                 schema["properties"][param_name] = {"type": "string", "description": "device reference"}
             else:
                 schema["properties"][param_name] = self._generate_schema_from_info(
-                    param_name, param_type, param_default
+                    param_name, param_type, param_default, import_map=import_map
                 )
 
             if param_name in param_descs:
@@ -638,7 +621,7 @@ class Registry:
     # 动态类信息提取 (import-based)
     # ------------------------------------------------------------------
 
-    def _extract_class_info(self, cls) -> Dict[str, Any]:
+    def _extract_class_info(self, cls: type) -> Dict[str, Any]:
         """
         从类中提取 init 参数、状态方法和动作方法信息。
         """
@@ -720,261 +703,6 @@ class Registry:
                 result["action_methods"][name] = method_info
 
         return result
-
-    # ------------------------------------------------------------------
-    # 设备注册表条目构建 (import-based)
-    # ------------------------------------------------------------------
-
-    def _build_device_entry(self, cls, device_meta: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        """
-        根据类和装饰器元数据构建一个设备的完整注册表条目。
-        """
-        class_info = self._extract_class_info(cls)
-        module_str = f"{cls.__module__}:{cls.__name__}"
-
-        # --- status_types ---
-        status_types_str = {}
-        status_types_ros = {}
-        status_str_type_mapping = {}
-
-        for name, info in class_info["status_methods"].items():
-            ret_type = info.get("return_type", "str")
-            if isinstance(ret_type, tuple) or ret_type in ["Any", "None", "Unknown"]:
-                ret_type = "String"
-            status_types_str[name] = ret_type
-
-            target_type = self._replace_type_with_class(ret_type, device_meta.get("device_id", ""), f"状态 {name}")
-            if target_type in [dict, list]:
-                target_type = String
-            if target_type:
-                status_types_ros[name] = target_type
-                status_str_type_mapping[ret_type] = target_type
-
-        status_types_str = dict(sorted(status_types_str.items()))
-
-        # --- action_value_mappings ---
-        action_value_mappings_yaml = {}
-        action_value_mappings_runtime = {}
-        action_str_type_mapping = {
-            "UniLabJsonCommand": "UniLabJsonCommand",
-            "UniLabJsonCommandAsync": "UniLabJsonCommandAsync",
-        }
-
-        # 1) auto- 动作
-        for method_name, method_info in class_info["action_methods"].items():
-            is_async = method_info.get("is_async", False)
-            type_str = "UniLabJsonCommandAsync" if is_async else "UniLabJsonCommand"
-            schema = self._generate_unilab_json_command_schema(
-                method_info["args"],
-                docstring=getattr(getattr(cls, method_name, None), "__doc__", None),
-            )
-            goal_default = {a["name"]: a.get("default") for a in method_info["args"]}
-
-            action_entry = {
-                "type": type_str,
-                "goal": {},
-                "feedback": {},
-                "result": {},
-                "schema": schema,
-                "goal_default": goal_default,
-                "handles": {},
-            }
-            action_value_mappings_yaml[f"auto-{method_name}"] = action_entry
-            action_value_mappings_runtime[f"auto-{method_name}"] = copy.deepcopy(action_entry)
-
-        # 2) @action() 无 action_type
-        for method_name, info in class_info["decorated_no_type_actions"].items():
-            method_info = info["method_info"]
-            action_meta = info["action_meta"]
-            is_async = method_info.get("is_async", False)
-            type_str = "UniLabJsonCommandAsync" if is_async else "UniLabJsonCommand"
-            schema = self._generate_unilab_json_command_schema(
-                method_info["args"],
-                docstring=getattr(getattr(cls, method_name, None), "__doc__", None),
-            )
-            goal_default = {a["name"]: a.get("default") for a in method_info["args"]}
-
-            action_name = action_meta.get("action_name", method_name)
-            action_entry = {
-                "type": type_str,
-                "goal": {},
-                "feedback": {},
-                "result": {},
-                "schema": schema,
-                "goal_default": goal_default,
-                "handles": {},
-            }
-            if is_always_free(getattr(cls, method_name, None)):
-                action_entry["always_free"] = True
-            action_value_mappings_yaml[action_name] = action_entry
-            action_value_mappings_runtime[action_name] = copy.deepcopy(action_entry)
-
-        # 3) @action(action_type=X)
-        for method_name, info in class_info["explicit_actions"].items():
-            method_info = info["method_info"]
-            action_meta = info["action_meta"]
-            action_type_raw = action_meta.get("action_type", "")
-            action_name = action_meta.get("action_name", method_name)
-
-            action_type_obj = None
-            if isinstance(action_type_raw, type):
-                action_type_obj = action_type_raw
-                action_type_str = f"{action_type_raw.__module__}:{action_type_raw.__name__}"
-            elif isinstance(action_type_raw, str) and "." in action_type_raw and ":" not in action_type_raw:
-                parts = action_type_raw.rsplit(".", 1)
-                action_type_str = f"{parts[0]}:{parts[1]}" if len(parts) == 2 else action_type_raw
-                action_type_obj = resolve_type_object(action_type_str)
-            else:
-                action_type_str = str(action_type_raw)
-                if ":" in action_type_str:
-                    action_type_obj = resolve_type_object(action_type_str)
-
-            action_str_type_mapping[action_type_str] = action_type_str
-
-            # goal: 优先方法参数 identity, 其次 MRO 父类参数 (需 parent=True), 最后 ROS2 Goal identity
-            method_args = method_info.get("args", [])
-            goal = {a["name"]: a["name"] for a in method_args}
-            if not goal and action_meta.get("parent"):
-                for base_cls in cls.__mro__:
-                    if method_name not in base_cls.__dict__:
-                        continue
-                    base_method = base_cls.__dict__[method_name]
-                    actual = getattr(base_method, "__wrapped__", base_method)
-                    if isinstance(actual, (staticmethod, classmethod)):
-                        actual = actual.__func__
-                    if not callable(actual):
-                        continue
-                    try:
-                        sig = inspect.signature(actual, follow_wrapped=True)
-                        params = [
-                            p.name for p in sig.parameters.values()
-                            if p.name not in ("self", "cls")
-                            and p.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
-                        ]
-                        if params:
-                            goal = {p: p for p in params}
-                            break
-                    except (ValueError, TypeError):
-                        continue
-            if not goal and action_type_obj is not None and hasattr(action_type_obj, "Goal"):
-                try:
-                    goal = {k: k for k in action_type_obj.Goal.get_fields_and_field_types()}
-                except Exception:
-                    pass
-            goal_mapping_override = action_meta.get("goal_mapping", {})
-            if goal_mapping_override:
-                override_values = set(goal_mapping_override.values())
-                goal = {k: v for k, v in goal.items() if not (k == v and v in override_values)}
-            goal.update(goal_mapping_override)
-
-            # feedback / result: ROS2 identity + override
-            feedback = {}
-            if action_type_obj is not None and hasattr(action_type_obj, "Feedback"):
-                try:
-                    feedback = {k: k for k in action_type_obj.Feedback.get_fields_and_field_types()}
-                except Exception:
-                    pass
-            feedback.update(action_meta.get("feedback_mapping", {}))
-
-            result_mapping = {}
-            if action_type_obj is not None and hasattr(action_type_obj, "Result"):
-                try:
-                    result_mapping = {k: k for k in action_type_obj.Result.get_fields_and_field_types()}
-                except Exception:
-                    pass
-            result_mapping.update(action_meta.get("result_mapping", {}))
-
-            goal_default = {}
-            if action_type_obj is not None and hasattr(action_type_obj, "Goal"):
-                try:
-                    goal_default = ROS2MessageInstance(action_type_obj.Goal()).get_python_dict()
-                except Exception:
-                    pass
-
-            action_entry = {
-                "type": action_type_str,
-                "goal": goal,
-                "feedback": feedback,
-                "result": result_mapping,
-                "schema": ros_action_to_json_schema(action_type_str),
-                "goal_default": goal_default,
-                "handles": {},
-            }
-            if is_always_free(getattr(cls, method_name, None)):
-                action_entry["always_free"] = True
-            action_value_mappings_yaml[action_name] = action_entry
-            action_value_mappings_runtime[action_name] = copy.deepcopy(action_entry)
-
-        action_value_mappings_yaml = dict(sorted(action_value_mappings_yaml.items()))
-        action_value_mappings_runtime = dict(sorted(action_value_mappings_runtime.items()))
-
-        # --- init_param_schema ---
-        init_schema = self._generate_unilab_json_command_schema(class_info["init_params"])
-
-        # --- handles ---
-        handles_raw = device_meta.get("handles", [])
-        handles = []
-        for h in handles_raw:
-            if isinstance(h, dict):
-                handles.append(h)
-            elif hasattr(h, "to_dict"):
-                handles.append(h.to_dict())
-
-        # --- 构建 YAML 版本 ---
-        yaml_entry: Dict[str, Any] = {
-            "category": device_meta.get("category", []),
-            "class": {
-                "module": module_str,
-                "status_types": status_types_str,
-                "action_value_mappings": action_value_mappings_yaml,
-                "init_params": {a["name"]: a.get("type", "") for a in class_info["init_params"]},
-            },
-            "description": device_meta.get("description", ""),
-            "handles": handles,
-            "icon": device_meta.get("icon", ""),
-            "init_param_schema": init_schema,
-            "version": device_meta.get("version", "1.0.0"),
-        }
-
-        # --- 构建运行时版本 ---
-        runtime_entry: Dict[str, Any] = {
-            "category": device_meta.get("category", []),
-            "class": {
-                "module": module_str,
-                "status_types": status_types_ros,
-                "action_value_mappings": action_value_mappings_runtime,
-                "init_params": {a["name"]: a.get("type", "") for a in class_info["init_params"]},
-            },
-            "description": device_meta.get("description", ""),
-            "handles": handles,
-            "icon": device_meta.get("icon", ""),
-            "init_param_schema": init_schema,
-            "version": device_meta.get("version", "1.0.0"),
-        }
-
-        return yaml_entry, runtime_entry
-
-    def _build_resource_entry(self, obj, resource_meta: Dict[str, Any]) -> Dict[str, Any]:
-        """根据 @resource 元数据构建资源注册表条目"""
-        module_str = f"{obj.__module__}:{obj.__name__}" if hasattr(obj, "__name__") else ""
-
-        entry = {
-            "category": resource_meta.get("category") or [],
-            "class": {
-                "module": module_str,
-                "type": resource_meta.get("class_type", "python"),
-            },
-            "description": resource_meta.get("description", ""),
-            "handles": [],
-            "icon": resource_meta.get("icon", ""),
-            "init_param_schema": {},
-            "version": resource_meta.get("version", "1.0.0"),
-        }
-
-        if resource_meta.get("model"):
-            entry["model"] = resource_meta["model"]
-
-        return entry
 
     # ------------------------------------------------------------------
     # 内置动作
@@ -1186,6 +914,7 @@ class Registry:
                     logger.debug(f"[AST] device action '{action_name}': Result enrichment failed: {e}")
                 try:
                     schema = ros_action_to_json_schema(action_type_obj)
+                    strip_ros_descriptions(schema)
                 except Exception:
                     pass
                 # 直接从 ROS2 Goal 实例获取默认值 (msgcenterpy)
@@ -1366,14 +1095,49 @@ class Registry:
         return entry
 
     # ------------------------------------------------------------------
+    # 定向 AST 扫描（供 complete_registry Case 1 使用）
+    # ------------------------------------------------------------------
+
+    def _ast_scan_module(self, module_str: str) -> Optional[Dict[str, Any]]:
+        """对单个 module_str 做定向 AST 扫描，返回 ast_meta 或 None。
+
+        用于 complete_registry 模式下 YAML 中存在但 AST 全量扫描未覆盖的设备/资源。
+        仅做文件定位 + AST 解析，不实例化类。
+        """
+        from unilabos.registry.ast_registry_scanner import _parse_file
+
+        mod_part = module_str.split(":")[0]
+        try:
+            mod = importlib.import_module(mod_part)
+            src_file = Path(inspect.getfile(mod))
+        except Exception:
+            return None
+
+        python_path = Path(__file__).resolve().parent.parent.parent
+        try:
+            devs, ress = _parse_file(src_file, python_path)
+        except Exception:
+            return None
+
+        for d in devs:
+            if d.get("module") == module_str:
+                return d
+        for r in ress:
+            if r.get("module") == module_str:
+                return r
+        return None
+
+    # ------------------------------------------------------------------
     # config_info 缓存 (pickle 格式，比 JSON 快 ~10x，debug 模式下差异更大)
     # ------------------------------------------------------------------
 
     @staticmethod
     def _get_config_cache_path() -> Optional[Path]:
         if BasicConfig.working_dir:
-            return Path(BasicConfig.working_dir) / "resource_config_cache.pkl"
+            return Path(BasicConfig.working_dir) / "registry_cache.pkl"
         return None
+
+    _CACHE_VERSION = 3
 
     def _load_config_cache(self) -> dict:
         import pickle
@@ -1382,7 +1146,7 @@ class Registry:
             return {}
         try:
             data = pickle.loads(cache_path.read_bytes())
-            if not isinstance(data, dict) or data.get("_version") != 2:
+            if not isinstance(data, dict) or data.get("_version") != self._CACHE_VERSION:
                 return {}
             return data
         except Exception:
@@ -1394,7 +1158,7 @@ class Registry:
         if cache_path is None:
             return
         try:
-            cache["_version"] = 2
+            cache["_version"] = self._CACHE_VERSION
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             tmp = cache_path.with_suffix(".tmp")
             tmp.write_bytes(pickle.dumps(cache, protocol=pickle.HIGHEST_PROTOCOL))
@@ -1709,60 +1473,6 @@ class Registry:
                 logger.debug(f"[Registry] 设备 {device_id} 类型解析失败: {e}")
 
     # ------------------------------------------------------------------
-    # 模块加载 (import-based)
-    # ------------------------------------------------------------------
-
-    def load_modules(self, module_paths: List[str]):
-        """导入指定的 Python 模块，触发其中的装饰器执行。"""
-        for module_path in module_paths:
-            try:
-                importlib.import_module(module_path)
-                logger.debug(f"[Registry] 已导入模块: {module_path}")
-            except Exception as e:
-                logger.warning(f"[Registry] 导入模块 {module_path} 失败: {e}")
-
-    def setup_from_imports(self, module_paths: Optional[List[str]] = None):
-        """
-        通过实际 import 构建注册表 (较慢路径)。
-        """
-        if module_paths:
-            self.load_modules(module_paths)
-
-        for device_id, cls in get_all_registered_devices().items():
-            device_meta = get_device_meta(cls, device_id)
-            if device_meta is None:
-                continue
-
-            try:
-                yaml_entry, runtime_entry = self._build_device_entry(cls, device_meta)
-                runtime_entry["registry_type"] = "device"
-                runtime_entry["file_path"] = str(Path(inspect.getfile(cls)).absolute()).replace("\\", "/")
-                self._add_builtin_actions(runtime_entry, device_id)
-                self.device_type_registry[device_id] = runtime_entry
-                logger.debug(f"[Registry] 注册设备: {device_id}")
-            except Exception as e:
-                logger.warning(f"[Registry] 生成设备 {device_id} 注册表失败: {e}")
-                traceback.print_exc()
-
-        for resource_id, obj in get_all_registered_resources().items():
-            resource_meta = get_resource_meta(obj)
-            if resource_meta is None:
-                continue
-
-            try:
-                entry = self._build_resource_entry(obj, resource_meta)
-                entry["registry_type"] = "resource"
-                if hasattr(obj, "__module__"):
-                    try:
-                        entry["file_path"] = str(Path(inspect.getfile(obj)).absolute()).replace("\\", "/")
-                    except (TypeError, OSError):
-                        entry["file_path"] = ""
-                self.resource_type_registry[resource_id] = entry
-                logger.debug(f"[Registry] 注册资源: {resource_id}")
-            except Exception as e:
-                logger.warning(f"[Registry] 生成资源 {resource_id} 注册表失败: {e}")
-
-    # ------------------------------------------------------------------
     # YAML 注册表加载 (兼容旧格式)
     # ------------------------------------------------------------------
 
@@ -1786,9 +1496,20 @@ class Registry:
             return {}, {}, False
 
         complete_data = {}
+        skip_ids = set()
         for resource_id, resource_info in data.items():
             if not isinstance(resource_info, dict):
                 continue
+
+            # AST 已有该资源 → 跳过，提示冗余
+            if self.resource_type_registry.get(resource_id):
+                logger.warning(
+                    f"[UniLab Registry] 资源 '{resource_id}' 已由 AST 扫描注册，"
+                    f"YAML 定义冗余，跳过 YAML 处理"
+                )
+                skip_ids.add(resource_id)
+                continue
+
             if "version" not in resource_info:
                 resource_info["version"] = "1.0.0"
             if "category" not in resource_info:
@@ -1813,7 +1534,21 @@ class Registry:
             resource_info["registry_type"] = "resource"
             resource_info["file_path"] = str(file.absolute()).replace("\\", "/")
 
+        for rid in skip_ids:
+            data.pop(rid, None)
+
         complete_data = dict(sorted(complete_data.items()))
+
+        if complete_registry:
+            write_data = copy.deepcopy(complete_data)
+            for res_id, res_cfg in write_data.items():
+                res_cfg.pop("file_path", None)
+                res_cfg.pop("registry_type", None)
+            try:
+                with open(file, "w", encoding="utf-8") as f:
+                    yaml.dump(write_data, f, allow_unicode=True, default_flow_style=False, Dumper=NoAliasDumper)
+            except Exception as e:
+                logger.warning(f"[UniLab Registry] 写入资源文件失败: {file}, 错误: {e}")
 
         return data, complete_data, True
 
@@ -1838,29 +1573,33 @@ class Registry:
         uncached_files: list[Path] = []
         yaml_file_rids: dict[str, list[str]] = {}
 
-        for file in files:
-            file_key = str(file.absolute()).replace("\\", "/")
-            if upload_registry and yaml_cache:
-                try:
-                    yaml_md5 = _hl.md5(file.read_bytes()).hexdigest()
-                except OSError:
-                    uncached_files.append(file)
-                    yaml_cache_misses += 1
-                    continue
-                cached = yaml_cache.get(file_key)
-                if cached and cached.get("yaml_md5") == yaml_md5:
-                    module_hashes: dict = cached.get("module_hashes", {})
-                    all_ok = all(
-                        self._module_source_hash(m) == h
-                        for m, h in module_hashes.items()
-                    ) if module_hashes else True
-                    if all_ok and cached.get("entries"):
-                        for rid, entry in cached["entries"].items():
-                            self.resource_type_registry[rid] = entry
-                        yaml_cache_hits += 1
+        if complete_registry:
+            uncached_files = files
+            yaml_cache_misses = len(files)
+        else:
+            for file in files:
+                file_key = str(file.absolute()).replace("\\", "/")
+                if upload_registry and yaml_cache:
+                    try:
+                        yaml_md5 = _hl.md5(file.read_bytes()).hexdigest()
+                    except OSError:
+                        uncached_files.append(file)
+                        yaml_cache_misses += 1
                         continue
-            uncached_files.append(file)
-            yaml_cache_misses += 1
+                    cached = yaml_cache.get(file_key)
+                    if cached and cached.get("yaml_md5") == yaml_md5:
+                        module_hashes: dict = cached.get("module_hashes", {})
+                        all_ok = all(
+                            self._module_source_hash(m) == h
+                            for m, h in module_hashes.items()
+                        ) if module_hashes else True
+                        if all_ok and cached.get("entries"):
+                            for rid, entry in cached["entries"].items():
+                                self.resource_type_registry[rid] = entry
+                            yaml_cache_hits += 1
+                            continue
+                uncached_files.append(file)
+                yaml_cache_misses += 1
 
         # Process uncached YAML files with thread pool
         executor = self._startup_executor
@@ -1945,6 +1684,7 @@ class Registry:
         status_str_type_mapping = {}
         device_ids = []
 
+        skip_ids = set()
         for device_id, device_config in data.items():
             if not isinstance(device_config, dict):
                 continue
@@ -1968,6 +1708,16 @@ class Registry:
                 device_config["init_param_schema"] = {}
 
             if "class" in device_config:
+                # --- AST 已有该设备 → 跳过，提示冗余 ---
+                if self.device_type_registry.get(device_id):
+                    logger.warning(
+                        f"[UniLab Registry] 设备 '{device_id}' 已由 AST 扫描注册，"
+                        f"YAML 定义冗余，跳过 YAML 处理"
+                    )
+                    skip_ids.add(device_id)
+                    continue
+
+                # --- 正常 YAML 处理 ---
                 if "status_types" not in device_config["class"] or device_config["class"]["status_types"] is None:
                     device_config["class"]["status_types"] = {}
                 if (
@@ -1977,14 +1727,17 @@ class Registry:
                     device_config["class"]["action_value_mappings"] = {}
 
                 enhanced_info = {}
+                enhanced_import_map: Dict[str, str] = {}
                 if complete_registry:
+                    original_status_keys = set(device_config["class"]["status_types"].keys())
                     device_config["class"]["status_types"].clear()
-                    enhanced_info = get_enhanced_class_info(device_config["class"]["module"], use_dynamic=True)
-                    if not enhanced_info.get("dynamic_import_success", False):
+                    enhanced_info = get_enhanced_class_info(device_config["class"]["module"])
+                    if not enhanced_info.get("ast_analysis_success", False):
                         continue
-                    device_config["class"]["status_types"].update(
-                        {k: v["return_type"] for k, v in enhanced_info["status_methods"].items()}
-                    )
+                    enhanced_import_map = enhanced_info.get("import_map", {})
+                    for st_k, st_v in enhanced_info["status_methods"].items():
+                        if st_k in original_status_keys:
+                            device_config["class"]["status_types"][st_k] = st_v["return_type"]
 
                 # --- status_types: 字符串 → class 映射 ---
                 for status_name, status_type in device_config["class"]["status_types"].items():
@@ -2001,64 +1754,134 @@ class Registry:
                 device_config["class"]["status_types"] = dict(sorted(device_config["class"]["status_types"].items()))
 
                 if complete_registry:
-                    old_action_configs = {}
-                    for action_name, action_config in device_config["class"]["action_value_mappings"].items():
-                        old_action_configs[action_name] = action_config
+                    old_action_configs = dict(device_config["class"]["action_value_mappings"])
 
                     device_config["class"]["action_value_mappings"] = {
                         k: v
                         for k, v in device_config["class"]["action_value_mappings"].items()
                         if not k.startswith("auto-")
                     }
-                    device_config["class"]["action_value_mappings"].update(
-                        {
-                            f"auto-{k}": {
-                                "type": "UniLabJsonCommandAsync" if v["is_async"] else "UniLabJsonCommand",
-                                "goal": {i["name"]: i["default"] for i in v["args"] if i["default"] is not None},
-                                "feedback": {},
-                                "result": {},
-                                "schema": self._generate_unilab_json_command_schema(v["args"]),
-                                "goal_default": {i["name"]: i["default"] for i in v["args"]},
-                                "handles": old_action_configs.get(f"auto-{k}", {}).get("handles", []),
-                                "placeholder_keys": {
-                                    i["name"]: (
-                                        "unilabos_resources"
-                                        if i["type"] == "unilabos.registry.placeholder_type:ResourceSlot"
-                                        or i["type"] == ("list", "unilabos.registry.placeholder_type:ResourceSlot")
-                                        else "unilabos_devices"
-                                    )
-                                    for i in v["args"]
-                                    if i.get("type", "")
-                                    in [
-                                        "unilabos.registry.placeholder_type:ResourceSlot",
-                                        "unilabos.registry.placeholder_type:DeviceSlot",
-                                        ("list", "unilabos.registry.placeholder_type:ResourceSlot"),
-                                        ("list", "unilabos.registry.placeholder_type:DeviceSlot"),
-                                    ]
-                                },
-                                **({"always_free": True} if v.get("always_free") else {}),
-                            }
-                            for k, v in enhanced_info["action_methods"].items()
-                            if k not in device_config["class"]["action_value_mappings"]
+                    for k, v in enhanced_info["action_methods"].items():
+                        if k in device_config["class"]["action_value_mappings"]:
+                            action_key = k
+                        elif k.startswith("get_"):
+                            continue
+                        else:
+                            action_key = f"auto-{k}"
+                        goal_schema = self._generate_unilab_json_command_schema(
+                            v["args"], import_map=enhanced_import_map
+                        )
+                        ret_type = v.get("return_type", "")
+                        result_schema = None
+                        if ret_type and ret_type not in ("None", "Any", ""):
+                            result_schema = self._generate_schema_from_info(
+                                "result", ret_type, None, import_map=enhanced_import_map
+                            )
+                        old_cfg = old_action_configs.get(action_key) or old_action_configs.get(f"auto-{k}", {})
+                        new_schema = wrap_action_schema(goal_schema, action_key, result_schema=result_schema)
+                        old_schema = old_cfg.get("schema", {})
+                        if old_schema:
+                            preserve_field_descriptions(new_schema, old_schema)
+                            if "description" in old_schema:
+                                new_schema["description"] = old_schema["description"]
+                        new_schema.setdefault("description", "")
+
+                        old_type = old_cfg.get("type", "")
+                        entry_goal = old_cfg.get("goal", {})
+                        entry_feedback = {}
+                        entry_result = {}
+                        entry_schema = new_schema
+                        entry_goal_default = {i["name"]: i.get("default") for i in v["args"]}
+
+                        if old_type and not old_type.startswith("UniLabJsonCommand"):
+                            entry_type = old_type
+                            try:
+                                action_type_obj = self._replace_type_with_class(
+                                    old_type, device_id, f"动作 {action_key}"
+                                )
+                            except ROSMsgNotFound:
+                                action_type_obj = None
+                            if action_type_obj is not None and not isinstance(action_type_obj, str):
+                                real_params = [p for p in v["args"]]
+                                ros_goal = {p["name"]: p["name"] for p in real_params}
+                                try:
+                                    if hasattr(action_type_obj, "Goal"):
+                                        goal_fields = action_type_obj.Goal.get_fields_and_field_types()
+                                        ros2_goal = {f: f for f in goal_fields}
+                                        ros2_goal.update(ros_goal)
+                                        entry_goal = ros2_goal
+                                except Exception:
+                                    pass
+                                try:
+                                    if hasattr(action_type_obj, "Feedback"):
+                                        fb_fields = action_type_obj.Feedback.get_fields_and_field_types()
+                                        entry_feedback = {f: f for f in fb_fields}
+                                except Exception:
+                                    pass
+                                try:
+                                    if hasattr(action_type_obj, "Result"):
+                                        res_fields = action_type_obj.Result.get_fields_and_field_types()
+                                        entry_result = {f: f for f in res_fields}
+                                except Exception:
+                                    pass
+                                try:
+                                    entry_schema = ros_action_to_json_schema(action_type_obj)
+                                    strip_ros_descriptions(entry_schema)
+                                    if old_schema:
+                                        preserve_field_descriptions(entry_schema, old_schema)
+                                        if "description" in old_schema:
+                                            entry_schema["description"] = old_schema["description"]
+                                    entry_schema.setdefault("description", "")
+                                except Exception:
+                                    pass
+                                try:
+                                    entry_goal_default = ROS2MessageInstance(
+                                        action_type_obj.Goal()
+                                    ).get_python_dict()
+                                except Exception:
+                                    entry_goal_default = old_cfg.get("goal_default", {})
+                        else:
+                            entry_type = "UniLabJsonCommandAsync" if v["is_async"] else "UniLabJsonCommand"
+
+                        merged_pk = dict(old_cfg.get("placeholder_keys", {}))
+                        merged_pk.update(detect_placeholder_keys(v["args"]))
+
+                        entry = {
+                            "type": entry_type,
+                            "goal": entry_goal,
+                            "feedback": entry_feedback,
+                            "result": entry_result,
+                            "schema": entry_schema,
+                            "goal_default": entry_goal_default,
+                            "handles": old_cfg.get("handles", []),
+                            "placeholder_keys": merged_pk,
                         }
-                    )
-                    # 保留旧 schema 中的 description
-                    for action_name, old_config in old_action_configs.items():
-                        if action_name in device_config["class"]["action_value_mappings"]:
-                            old_schema = old_config.get("schema", {})
-                            new_schema = device_config["class"]["action_value_mappings"][action_name].get("schema", {})
-                            if old_schema:
-                                preserve_field_descriptions(new_schema, old_schema)
-                                if "description" in old_schema and old_schema["description"]:
-                                    new_schema["description"] = old_schema["description"]
+                        if v.get("always_free"):
+                            entry["always_free"] = True
+                        device_config["class"]["action_value_mappings"][action_key] = entry
 
                     device_config["init_param_schema"] = {}
-                    device_config["init_param_schema"]["config"] = self._generate_unilab_json_command_schema(
-                        enhanced_info["init_params"], "__init__"
-                    )["properties"]["goal"]
-                    device_config["init_param_schema"]["data"] = self._generate_status_types_schema(
-                        enhanced_info["status_methods"]
+                    init_schema = self._generate_unilab_json_command_schema(
+                        enhanced_info["init_params"], "__init__",
+                        import_map=enhanced_import_map,
                     )
+                    device_config["init_param_schema"]["config"] = init_schema
+
+                    data_schema: Dict[str, Any] = {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                    }
+                    for st_name in device_config["class"]["status_types"]:
+                        st_type_str = device_config["class"]["status_types"][st_name]
+                        if isinstance(st_type_str, str):
+                            data_schema["properties"][st_name] = self._generate_schema_from_info(
+                                st_name, st_type_str, None, import_map=enhanced_import_map
+                            )
+                        else:
+                            data_schema["properties"][st_name] = {"type": "string"}
+                        data_schema["required"].append(st_name)
+                    device_config["init_param_schema"]["data"] = data_schema
 
                 # --- action_value_mappings: 处理非 UniLabJsonCommand 类型 ---
                 device_config.pop("schema", None)
@@ -2089,7 +1912,14 @@ class Registry:
                                     action_config["goal_default"] = ROS2MessageInstance(target_type.Goal()).get_python_dict()
                                 except Exception:
                                     action_config["goal_default"] = {}
+                                prev_schema = action_config.get("schema", {})
                                 action_config["schema"] = ros_action_to_json_schema(target_type)
+                                strip_ros_descriptions(action_config["schema"])
+                                if prev_schema:
+                                    preserve_field_descriptions(action_config["schema"], prev_schema)
+                                    if "description" in prev_schema:
+                                        action_config["schema"]["description"] = prev_schema["description"]
+                                action_config["schema"].setdefault("description", "")
                             else:
                                 logger.warning(
                                     f"[UniLab Registry] 设备 {device_id} 的动作 {action_name} 类型为空，跳过替换"
@@ -2112,10 +1942,12 @@ class Registry:
 
             device_ids.append(device_id)
 
+        for did in skip_ids:
+            data.pop(did, None)
+
         complete_data = dict(sorted(complete_data.items()))
         complete_data = copy.deepcopy(complete_data)
         if complete_registry:
-            # 仅在 complete_registry 模式下回写 YAML，排除运行时字段
             write_data = copy.deepcopy(complete_data)
             for dev_id, dev_cfg in write_data.items():
                 dev_cfg.pop("file_path", None)
@@ -2264,7 +2096,7 @@ class Registry:
 lab_registry = Registry()
 
 
-def build_registry(registry_paths=None, devices_dirs=None, upload_registry=False, check_mode=False):
+def build_registry(registry_paths=None, devices_dirs=None, upload_registry=False, check_mode=False, complete_registry=False):
     """
     构建或获取Registry单例实例
     """
@@ -2278,7 +2110,7 @@ def build_registry(registry_paths=None, devices_dirs=None, upload_registry=False
             if path not in current_paths:
                 lab_registry.registry_paths.append(path)
 
-    lab_registry.setup(devices_dirs=devices_dirs, upload_registry=upload_registry)
+    lab_registry.setup(devices_dirs=devices_dirs, upload_registry=upload_registry, complete_registry=complete_registry)
 
     # 将 AST 扫描的字符串类型替换为实际 ROS2 消息类（仅查找 ROS2 类型，不 import 设备模块）
     lab_registry.resolve_all_types()

@@ -19,7 +19,6 @@ hplc_plate:
     - 3.1416
     path: https://uni-lab.oss-cn-zhangjiakou.aliyuncs.com/uni-lab/resources/hplc_plate/modal.xacro
     type: resource
-  registry_type: resource
   version: 1.0.0
 plate_96:
   category:
@@ -42,7 +41,6 @@ plate_96:
     - 0
     path: https://uni-lab.oss-cn-zhangjiakou.aliyuncs.com/uni-lab/resources/plate_96/modal.xacro
     type: resource
-  registry_type: resource
   version: 1.0.0
 plate_96_high:
   category:
@@ -65,7 +63,6 @@ plate_96_high:
     - 1.5708
     path: https://uni-lab.oss-cn-zhangjiakou.aliyuncs.com/uni-lab/resources/plate_96_high/modal.xacro
     type: resource
-  registry_type: resource
   version: 1.0.0
 tiprack_96_high:
   category:
@@ -97,7 +94,6 @@ tiprack_96_high:
     - 1.5708
     path: https://uni-lab.oss-cn-zhangjiakou.aliyuncs.com/uni-lab/resources/tiprack_96_high/modal.xacro
     type: resource
-  registry_type: resource
   version: 1.0.0
 tiprack_box:
   category:
@@ -129,5 +125,4 @@ tiprack_box:
     - 0
     path: https://uni-lab.oss-cn-zhangjiakou.aliyuncs.com/uni-lab/resources/tiprack_box/modal.xacro
     type: resource
-  registry_type: resource
   version: 1.0.0

@@ -1,19 +1,8 @@
-import json
 import time
 from typing import Any, Dict, Optional, Tuple
 
 from unilabos.utils.log import logger
-from unilabos.utils.type_check import TypeEncoder
-
-try:
-    import orjson
-
-    def _normalize_device(info: dict) -> dict:
-        """Serialize via orjson to strip non-JSON types (type objects etc.)."""
-        return orjson.loads(orjson.dumps(info, default=str))
-except ImportError:
-    def _normalize_device(info: dict) -> dict:
-        return json.loads(json.dumps(info, ensure_ascii=False, cls=TypeEncoder))
+from unilabos.utils.tools import normalize_json as _normalize_device
 
 
 def register_devices_and_resources(lab_registry, gather_only=False) -> Optional[Tuple[Dict[str, Any], Dict[str, Any]]]:

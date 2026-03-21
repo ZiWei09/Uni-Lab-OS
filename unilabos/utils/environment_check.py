@@ -33,7 +33,7 @@ class EnvironmentChecker:
 
         # 包版本要求（包名: 最低版本）
         self.version_requirements = {
-            "msgcenterpy": "0.1.7",  # msgcenterpy 最低版本要求
+            "msgcenterpy": "0.1.8",  # msgcenterpy 最低版本要求
         }
 
         self.missing_packages = []

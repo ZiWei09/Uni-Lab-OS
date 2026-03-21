@@ -599,14 +599,39 @@ def wrap_action_schema(
 
 
 def preserve_field_descriptions(new_schema: Dict[str, Any], prev_schema: Dict[str, Any]):
-    """保留之前 schema 中的 field descriptions"""
+    """递归保留之前 schema 中各字段的 description / title。
+
+    覆盖顶层以及嵌套 properties（如 goal.properties.xxx.description）。
+    """
     if not prev_schema or not new_schema:
         return
     prev_props = prev_schema.get("properties", {})
     new_props = new_schema.get("properties", {})
     for field_name, prev_field in prev_props.items():
-        if field_name in new_props and "title" in prev_field:
-            new_props[field_name].setdefault("title", prev_field["title"])
+        if field_name not in new_props:
+            continue
+        new_field = new_props[field_name]
+        if not isinstance(prev_field, dict) or not isinstance(new_field, dict):
+            continue
+        if "title" in prev_field:
+            new_field.setdefault("title", prev_field["title"])
+        if "description" in prev_field:
+            new_field.setdefault("description", prev_field["description"])
+        if "properties" in prev_field and "properties" in new_field:
+            preserve_field_descriptions(new_field, prev_field)
+
+
+def strip_ros_descriptions(schema: Any):
+    """递归清除 ROS schema 中自动生成的无意义 description（含 rosidl_parser 内存地址）。"""
+    if isinstance(schema, dict):
+        desc = schema.get("description", "")
+        if isinstance(desc, str) and "rosidl_parser" in desc:
+            del schema["description"]
+        for v in schema.values():
+            strip_ros_descriptions(v)
+    elif isinstance(schema, list):
+        for item in schema:
+            strip_ros_descriptions(item)
 
 
 # ---------------------------------------------------------------------------

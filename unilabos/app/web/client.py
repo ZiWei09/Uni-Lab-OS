@@ -8,24 +8,7 @@ import json
 import os
 from typing import List, Dict, Any, Optional
 
-try:
-    import orjson as _json_fast
-
-    def _fast_dumps(obj, **kwargs) -> bytes:
-        return _json_fast.dumps(obj, option=_json_fast.OPT_NON_STR_KEYS, default=str)
-
-    def _fast_dumps_pretty(obj, **kwargs) -> bytes:
-        return _json_fast.dumps(
-            obj, option=_json_fast.OPT_NON_STR_KEYS | _json_fast.OPT_INDENT_2, default=str,
-        )
-except ImportError:
-    _json_fast = None  # type: ignore[assignment]
-
-    def _fast_dumps(obj, **kwargs) -> bytes:
-        return json.dumps(obj, ensure_ascii=False, default=str).encode("utf-8")
-
-    def _fast_dumps_pretty(obj, **kwargs) -> bytes:
-        return json.dumps(obj, indent=2, ensure_ascii=False, default=str).encode("utf-8")
+from unilabos.utils.tools import fast_dumps as _fast_dumps, fast_dumps_pretty as _fast_dumps_pretty
 
 import requests
 from unilabos.resources.resource_tracker import ResourceTreeSet
