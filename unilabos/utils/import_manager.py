@@ -41,6 +41,7 @@ class ImportManager:
         self._modules: Dict[str, Any] = {}
         self._classes: Dict[str, Type] = {}
         self._functions: Dict[str, Callable] = {}
+        self._search_miss: set = set()
 
         if module_list:
             for module_path in module_list:
@@ -155,29 +156,30 @@ class ImportManager:
         Returns:
             找到的类对象，如果未找到则返回None
         """
-        # 如果cls_name是builtins中的关键字，则返回对应类
         if class_name in builtins.__dict__:
             return builtins.__dict__[class_name]
-        # 首先在已索引的类中查找
         if class_name in self._classes:
             return self._classes[class_name]
+
+        cache_key = class_name.lower() if search_lower else class_name
+        if cache_key in self._search_miss:
+            return None
 
         if search_lower:
             classes = {name.lower(): obj for name, obj in self._classes.items()}
             if class_name in classes:
                 return classes[class_name]
 
-        # 遍历所有已加载的模块进行搜索
         for module_path, module in self._modules.items():
             for name, obj in inspect.getmembers(module):
                 if inspect.isclass(obj) and (
                     (name.lower() == class_name.lower()) if search_lower else (name == class_name)
                 ):
-                    # 将找到的类添加到索引中
                     self._classes[name] = obj
                     self._classes[f"{module_path}:{name}"] = obj
                     return obj
 
+        self._search_miss.add(cache_key)
         return None
 
     def get_enhanced_class_info(self, module_path: str, **_kwargs) -> Dict[str, Any]:
