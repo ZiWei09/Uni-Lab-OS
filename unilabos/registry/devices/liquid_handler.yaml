@@ -866,68 +866,40 @@ liquid_handler:
                   additionalProperties: false
                   properties:
                     category:
-                      description: Field of type <rosidl_parser.definition.UnboundedString
-                        object at 0x0000025304D2D2A0>
                       type: string
                     children:
-                      description: Field of type <rosidl_parser.definition.UnboundedSequence
-                        object at 0x0000025304D12EC0>
                       items:
-                        description: Field of type <rosidl_parser.definition.UnboundedString
-                          object at 0x0000025304D2C320>
                         type: string
                       type: array
                     config:
-                      description: Field of type <rosidl_parser.definition.UnboundedString
-                        object at 0x0000025304D2D2C0>
                       type: string
                     data:
-                      description: Field of type <rosidl_parser.definition.UnboundedString
-                        object at 0x0000025304D2D2E0>
                       type: string
                     id:
-                      description: Field of type <rosidl_parser.definition.UnboundedString
-                        object at 0x0000025304D2D280>
                       type: string
                     name:
-                      description: Field of type <rosidl_parser.definition.UnboundedString
-                        object at 0x0000025304D2D240>
                       type: string
                     parent:
-                      description: Field of type <rosidl_parser.definition.UnboundedString
-                        object at 0x0000025304D2CF80>
                       type: string
                     pose:
                       additionalProperties: false
-                      description: Field of type <rosidl_parser.definition.NamespacedType
-                        object at 0x0000025304D12EF0>
                       properties:
                         orientation:
                           additionalProperties: false
-                          description: Field of type <rosidl_parser.definition.NamespacedType
-                            object at 0x000002530511A080>
                           properties:
                             w:
-                              description: Field of type <rosidl_parser.definition.BasicType
-                                object at 0x0000025305138C70>
                               maximum: 1.7976931348623157e+308
                               minimum: -1.7976931348623157e+308
                               type: number
                             x:
-                              description: Field of type <rosidl_parser.definition.BasicType
-                                object at 0x0000025305138BE0>
                               maximum: 1.7976931348623157e+308
                               minimum: -1.7976931348623157e+308
                               type: number
                             y:
-                              description: Field of type <rosidl_parser.definition.BasicType
-                                object at 0x0000025305138C10>
                               maximum: 1.7976931348623157e+308
                               minimum: -1.7976931348623157e+308
                               type: number
                             z:
-                              description: Field of type <rosidl_parser.definition.BasicType
-                                object at 0x0000025305138C40>
                               maximum: 1.7976931348623157e+308
                               minimum: -1.7976931348623157e+308
                               type: number
@@ -940,24 +912,16 @@ liquid_handler:
                           type: object
                         position:
                           additionalProperties: false
-                          description: Field of type <rosidl_parser.definition.NamespacedType
-                            object at 0x000002530511A050>
                           properties:
                             x:
-                              description: Field of type <rosidl_parser.definition.BasicType
-                                object at 0x00000253050E7FD0>
                               maximum: 1.7976931348623157e+308
                               minimum: -1.7976931348623157e+308
                               type: number
                             y:
-                              description: Field of type <rosidl_parser.definition.BasicType
-                                object at 0x0000025305118040>
                               maximum: 1.7976931348623157e+308
                               minimum: -1.7976931348623157e+308
                               type: number
                             z:
-                              description: Field of type <rosidl_parser.definition.BasicType
-                                object at 0x0000025305118070>
                               maximum: 1.7976931348623157e+308
                               minimum: -1.7976931348623157e+308
                               type: number
@@ -973,12 +937,8 @@ liquid_handler:
                       title: pose
                       type: object
                     sample_id:
-                      description: Field of type <rosidl_parser.definition.UnboundedString
-                        object at 0x0000025304D2D220>
                       type: string
                     type:
-                      description: Field of type <rosidl_parser.definition.UnboundedString
-                        object at 0x0000025304D2CE20>
                       type: string
                   title: plate
                   type: object
@@ -9300,68 +9260,40 @@ liquid_handler.prcxi:
                   additionalProperties: false
                   properties:
                     category:
-                      description: Field of type <rosidl_parser.definition.UnboundedString
-                        object at 0x0000025304D2D2A0>
                       type: string
                     children:
-                      description: Field of type <rosidl_parser.definition.UnboundedSequence
-                        object at 0x0000025304D12EC0>
                       items:
-                        description: Field of type <rosidl_parser.definition.UnboundedString
-                          object at 0x0000025304D2C320>
                         type: string
                       type: array
                     config:
-                      description: Field of type <rosidl_parser.definition.UnboundedString
-                        object at 0x0000025304D2D2C0>
                       type: string
                     data:
-                      description: Field of type <rosidl_parser.definition.UnboundedString
-                        object at 0x0000025304D2D2E0>
                       type: string
                     id:
-                      description: Field of type <rosidl_parser.definition.UnboundedString
-                        object at 0x0000025304D2D280>
                       type: string
                     name:
-                      description: Field of type <rosidl_parser.definition.UnboundedString
-                        object at 0x0000025304D2D240>
                       type: string
                     parent:
-                      description: Field of type <rosidl_parser.definition.UnboundedString
-                        object at 0x0000025304D2CF80>
                       type: string
                     pose:
                       additionalProperties: false
-                      description: Field of type <rosidl_parser.definition.NamespacedType
-                        object at 0x0000025304D12EF0>
                       properties:
                         orientation:
                           additionalProperties: false
-                          description: Field of type <rosidl_parser.definition.NamespacedType
-                            object at 0x000002530511A080>
                           properties:
                             w:
-                              description: Field of type <rosidl_parser.definition.BasicType
-                                object at 0x0000025305138C70>
                               maximum: 1.7976931348623157e+308
                               minimum: -1.7976931348623157e+308
                               type: number
                             x:
-                              description: Field of type <rosidl_parser.definition.BasicType
-                                object at 0x0000025305138BE0>
                               maximum: 1.7976931348623157e+308
                               minimum: -1.7976931348623157e+308
                               type: number
                             y:
-                              description: Field of type <rosidl_parser.definition.BasicType
-                                object at 0x0000025305138C10>
                               maximum: 1.7976931348623157e+308
                               minimum: -1.7976931348623157e+308
                               type: number
                             z:
-                              description: Field of type <rosidl_parser.definition.BasicType
-                                object at 0x0000025305138C40>
                               maximum: 1.7976931348623157e+308
                               minimum: -1.7976931348623157e+308
                               type: number
@@ -9374,24 +9306,16 @@ liquid_handler.prcxi:
                           type: object
                         position:
                           additionalProperties: false
-                          description: Field of type <rosidl_parser.definition.NamespacedType
-                            object at 0x000002530511A050>
                           properties:
                             x:
-                              description: Field of type <rosidl_parser.definition.BasicType
-                                object at 0x00000253050E7FD0>
                               maximum: 1.7976931348623157e+308
                               minimum: -1.7976931348623157e+308
                               type: number
                             y:
-                              description: Field of type <rosidl_parser.definition.BasicType
-                                object at 0x0000025305118040>
                               maximum: 1.7976931348623157e+308
                               minimum: -1.7976931348623157e+308
                               type: number
                             z:
-                              description: Field of type <rosidl_parser.definition.BasicType
-                                object at 0x0000025305118070>
                               maximum: 1.7976931348623157e+308
                               minimum: -1.7976931348623157e+308
                               type: number
@@ -9407,12 +9331,8 @@ liquid_handler.prcxi:
                       title: pose
                       type: object
                     sample_id:
-                      description: Field of type <rosidl_parser.definition.UnboundedString
-                        object at 0x0000025304D2D220>
                       type: string
                     type:
-                      description: Field of type <rosidl_parser.definition.UnboundedString
-                        object at 0x0000025304D2CE20>
                       type: string
                   title: plate
                   type: object

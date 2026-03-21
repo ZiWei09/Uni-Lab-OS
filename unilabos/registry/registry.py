@@ -47,7 +47,6 @@ from unilabos.registry.utils import (
     normalize_ast_action_handles,
     wrap_action_schema,
     preserve_field_descriptions,
-    strip_ros_descriptions,
     resolve_method_params_via_import,
     SIMPLE_TYPE_MAP,
 )
@@ -501,12 +500,17 @@ class Registry:
             json_type = SIMPLE_TYPE_MAP.get(param_type.lower())
             if json_type:
                 prop_schema["type"] = json_type
+            elif ":" in param_type:
+                type_obj = resolve_type_object(param_type)
+                if type_obj is not None:
+                    prop_schema = type_to_schema(type_obj)
+                else:
+                    prop_schema["type"] = "object"
             elif import_map and param_type in import_map:
                 type_obj = resolve_type_object(import_map[param_type])
                 if type_obj is not None:
                     prop_schema = type_to_schema(type_obj)
                 else:
-                    # 无法 import 的自定义类型，默认当 object 处理（与 YAML runtime 路径一致）
                     prop_schema["type"] = "object"
             else:
                 json_type = get_json_schema_type(param_type)
@@ -914,7 +918,6 @@ class Registry:
                     logger.debug(f"[AST] device action '{action_name}': Result enrichment failed: {e}")
                 try:
                     schema = ros_action_to_json_schema(action_type_obj)
-                    strip_ros_descriptions(schema)
                 except Exception:
                     pass
                 # 直接从 ROS2 Goal 实例获取默认值 (msgcenterpy)
@@ -1826,7 +1829,6 @@ class Registry:
                                     pass
                                 try:
                                     entry_schema = ros_action_to_json_schema(action_type_obj)
-                                    strip_ros_descriptions(entry_schema)
                                     if old_schema:
                                         preserve_field_descriptions(entry_schema, old_schema)
                                         if "description" in old_schema:
@@ -1914,7 +1916,6 @@ class Registry:
                                     action_config["goal_default"] = {}
                                 prev_schema = action_config.get("schema", {})
                                 action_config["schema"] = ros_action_to_json_schema(target_type)
-                                strip_ros_descriptions(action_config["schema"])
                                 if prev_schema:
                                     preserve_field_descriptions(action_config["schema"], prev_schema)
                                     if "description" in prev_schema:

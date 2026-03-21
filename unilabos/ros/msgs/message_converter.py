@@ -717,6 +717,19 @@ def ros_field_type_to_json_schema(
     # return {'type': 'object', 'description': f'未知类型: {field_type}'}
 
 
+def _strip_rosidl_descriptions(schema: Any) -> None:
+    """递归清除 rosidl_parser 自动生成的无意义 description（含内存地址）。"""
+    if isinstance(schema, dict):
+        desc = schema.get("description", "")
+        if isinstance(desc, str) and "rosidl_parser" in desc:
+            del schema["description"]
+        for v in schema.values():
+            _strip_rosidl_descriptions(v)
+    elif isinstance(schema, list):
+        for item in schema:
+            _strip_rosidl_descriptions(item)
+
+
 def ros_message_to_json_schema(msg_class: Any, field_name: str) -> Dict[str, Any]:
     """
     将 ROS 消息类转换为 JSON Schema
@@ -730,7 +743,8 @@ def ros_message_to_json_schema(msg_class: Any, field_name: str) -> Dict[str, Any
     """
     schema = ROS2MessageInstance(msg_class()).get_json_schema()
     schema["title"] = field_name
-    schema.pop("description")
+    schema.pop("description", None)
+    _strip_rosidl_descriptions(schema)
     return schema
 
 
@@ -776,6 +790,8 @@ def ros_action_to_json_schema(
         },
         "required": ["goal"],
     }
+
+    _strip_rosidl_descriptions(schema)
 
     # 保留之前 schema 中 goal/feedback/result 下一级字段的 description
     if previous_schema:

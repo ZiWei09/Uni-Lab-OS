@@ -1884,7 +1884,8 @@ class BaseROS2DeviceNode(Node, Generic[T]):
                     continue
 
                 # 处理单个 ResourceSlot
-                if arg_type == "unilabos.registry.placeholder_type:ResourceSlot":
+                _is_resource_slot = isinstance(arg_type, str) and arg_type.endswith(":ResourceSlot")
+                if _is_resource_slot:
                     resource_data = function_args[arg_name]
                     if isinstance(resource_data, dict) and "id" in resource_data:
                         try:
@@ -1898,8 +1899,7 @@ class BaseROS2DeviceNode(Node, Generic[T]):
 
                 # 处理 ResourceSlot 列表
                 elif isinstance(arg_type, tuple) and len(arg_type) == 2:
-                    resource_slot_type = "unilabos.registry.placeholder_type:ResourceSlot"
-                    if arg_type[0] == "list" and arg_type[1] == resource_slot_type:
+                    if arg_type[0] == "list" and isinstance(arg_type[1], str) and arg_type[1].endswith(":ResourceSlot"):
                         resource_list = function_args[arg_name]
                         if isinstance(resource_list, list):
                             try:

@@ -325,10 +325,11 @@ class ImportManager:
         return self._get_type_string(signature.return_annotation)
 
     def _get_type_string(self, annotation) -> Union[str, Tuple[str, Any]]:
-        """将类型注解转换为短类名（与 AST _get_annotation_str 对齐）。
+        """将类型注解转换为类型字符串。
 
-        自定义类只返回短名（如 ``"SetLiquidReturn"``），完整路径由
-        ``import_map`` 负责解析，保持与 AST 分析一致。
+        非内建类返回 ``module:ClassName`` 全路径（如
+        ``"unilabos.registry.placeholder_type:ResourceSlot"``），
+        避免短名冲突；内建类型直接返回短名（如 ``"str"``、``"int"``）。
         """
         if annotation == inspect.Parameter.empty:
             return "Any"
@@ -358,6 +359,9 @@ class ImportManager:
                 else annotation._name.lower()
             )
         if hasattr(annotation, "__name__"):
+            module = getattr(annotation, "__module__", None)
+            if module and module != "builtins":
+                return f"{module}:{annotation.__name__}"
             return annotation.__name__
         elif hasattr(annotation, "_name"):
             return annotation._name
