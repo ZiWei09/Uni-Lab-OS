@@ -82,7 +82,7 @@ def get_result_info_str(error: str, suc: bool, return_value=None) -> str:
     """
     samples = None
     if isinstance(return_value, dict):
-        if "samples" in return_value:
+        if "samples" in return_value and type(return_value["samples"]) in [list, tuple] and type(return_value["samples"][0]) == dict:
             samples = return_value.pop("samples")
     result_info = {"error": error, "suc": suc, "return_value": return_value, "samples": samples}
 

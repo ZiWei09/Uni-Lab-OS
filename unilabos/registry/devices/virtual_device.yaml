@@ -2804,6 +2804,294 @@ virtual_rotavap:
       - vacuum_pressure
       type: object
   version: 1.0.0
+virtual_sample_demo:
+  category:
+  - virtual_device
+  class:
+    action_value_mappings:
+      analyze_readings:
+        feedback: {}
+        goal:
+          readings: readings
+          samples: samples
+        goal_default:
+          readings: []
+          samples: []
+        handles:
+          input:
+          - data_key: readings
+            data_source: handle
+            data_type: sample_list
+            handler_key: readings_in
+            label: 测量读数
+          - data_key: samples
+            data_source: handle
+            data_type: sample_index
+            handler_key: samples_in
+            label: 样品索引
+          output:
+          - data_key: scores
+            data_source: executor
+            data_type: sample_list
+            handler_key: scores_out
+            label: 分析得分
+          - data_key: passed
+            data_source: executor
+            data_type: sample_list
+            handler_key: passed_out
+            label: 是否通过
+          - data_key: samples
+            data_source: executor
+            data_type: sample_index
+            handler_key: samples_result_out
+            label: 样品索引
+        placeholder_keys: {}
+        result:
+          passed: passed
+          samples: samples
+          scores: scores
+        schema:
+          description: 对 split_and_measure 输出做二次分析，入参和出参都带 samples 列
+          properties:
+            feedback:
+              properties: {}
+              required: []
+              title: AnalyzeReadings_Feedback
+              type: object
+            goal:
+              properties:
+                readings:
+                  description: 测量读数（来自 split_and_measure）
+                  items:
+                    type: number
+                  type: array
+                samples:
+                  description: 每行归属的输入样品 index (0-based)
+                  items:
+                    type: integer
+                  type: array
+              required:
+              - readings
+              - samples
+              title: AnalyzeReadings_Goal
+              type: object
+            result:
+              properties:
+                passed:
+                  description: 是否通过阈值
+                  items:
+                    type: boolean
+                  type: array
+                samples:
+                  description: 每行归属的输入样品 index (0-based)
+                  items:
+                    type: integer
+                  type: array
+                scores:
+                  description: 分析得分
+                  items:
+                    type: number
+                  type: array
+              required:
+              - scores
+              - passed
+              - samples
+              title: AnalyzeReadings_Result
+              type: object
+          required:
+          - goal
+          title: AnalyzeReadings
+          type: object
+        type: UniLabJsonCommandAsync
+      auto-cleanup:
+        feedback: {}
+        goal: {}
+        goal_default: {}
+        handles: {}
+        placeholder_keys: {}
+        result: {}
+        schema:
+          description: cleanup的参数schema
+          properties:
+            feedback: {}
+            goal:
+              properties: {}
+              required: []
+              type: object
+            result: {}
+          required:
+          - goal
+          title: cleanup参数
+          type: object
+        type: UniLabJsonCommandAsync
+      measure_samples:
+        feedback: {}
+        goal:
+          concentrations: concentrations
+        goal_default:
+          concentrations: []
+        handles:
+          output:
+          - data_key: concentrations
+            data_source: executor
+            data_type: sample_list
+            handler_key: concentrations_out
+            label: 浓度列表
+          - data_key: absorbance
+            data_source: executor
+            data_type: sample_list
+            handler_key: absorbance_out
+            label: 吸光度列表
+        placeholder_keys: {}
+        result:
+          absorbance: absorbance
+          concentrations: concentrations
+        schema:
+          description: 模拟光度测量，入参出参等长
+          properties:
+            feedback:
+              properties: {}
+              required: []
+              title: MeasureSamples_Feedback
+              type: object
+            goal:
+              properties:
+                concentrations:
+                  description: 样品浓度列表
+                  items:
+                    type: number
+                  type: array
+              required:
+              - concentrations
+              title: MeasureSamples_Goal
+              type: object
+            result:
+              properties:
+                absorbance:
+                  description: 吸光度列表（与浓度等长）
+                  items:
+                    type: number
+                  type: array
+                concentrations:
+                  description: 原始浓度列表
+                  items:
+                    type: number
+                  type: array
+              required:
+              - concentrations
+              - absorbance
+              title: MeasureSamples_Result
+              type: object
+          required:
+          - goal
+          title: MeasureSamples
+          type: object
+        type: UniLabJsonCommandAsync
+      split_and_measure:
+        feedback: {}
+        goal:
+          split_count: split_count
+          volumes: volumes
+        goal_default:
+          split_count: 3
+          volumes: []
+        handles:
+          output:
+          - data_key: readings
+            data_source: executor
+            data_type: sample_list
+            handler_key: readings_out
+            label: 测量读数
+          - data_key: samples
+            data_source: executor
+            data_type: sample_index
+            handler_key: samples_out
+            label: 样品索引
+          - data_key: volumes
+            data_source: executor
+            data_type: sample_list
+            handler_key: volumes_out
+            label: 均分体积
+        placeholder_keys: {}
+        result:
+          readings: readings
+          samples: samples
+          volumes: volumes
+        schema:
+          description: 均分样品后逐份测量，输出带 samples 列标注归属
+          properties:
+            feedback:
+              properties: {}
+              required: []
+              title: SplitAndMeasure_Feedback
+              type: object
+            goal:
+              properties:
+                split_count:
+                  description: 每个样品均分的份数
+                  type: integer
+                volumes:
+                  description: 样品体积列表
+                  items:
+                    type: number
+                  type: array
+              required:
+              - volumes
+              title: SplitAndMeasure_Goal
+              type: object
+            result:
+              properties:
+                readings:
+                  description: 测量读数
+                  items:
+                    type: number
+                  type: array
+                samples:
+                  description: 每行归属的输入样品 index (0-based)
+                  items:
+                    type: integer
+                  type: array
+                volumes:
+                  description: 均分后的体积列表
+                  items:
+                    type: number
+                  type: array
+              required:
+              - volumes
+              - readings
+              - samples
+              title: SplitAndMeasure_Result
+              type: object
+          required:
+          - goal
+          title: SplitAndMeasure
+          type: object
+        type: UniLabJsonCommandAsync
+    module: unilabos.devices.virtual.virtual_sample_demo:VirtualSampleDemo
+    status_types:
+      status: str
+    type: python
+  config_info: []
+  description: Virtual sample tracking demo device
+  handles: []
+  icon: ''
+  init_param_schema:
+    config:
+      properties:
+        config:
+          type: string
+        device_id:
+          type: string
+      required: []
+      type: object
+    data:
+      properties:
+        status:
+          type: string
+      required:
+      - status
+      type: object
+  version: 1.0.0
 virtual_separator:
   category:
   - virtual_device
