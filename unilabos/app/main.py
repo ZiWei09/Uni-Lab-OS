@@ -265,6 +265,12 @@ def parse_args():
         help="Test mode: all actions simulate execution and return mock results without running real hardware",
     )
     parser.add_argument(
+        "--external_devices_only",
+        action="store_true",
+        default=False,
+        help="Only load external device packages (--devices), skip built-in unilabos/devices/ scanning and YAML device registry",
+    )
+    parser.add_argument(
         "--extra_resource",
         action="store_true",
         default=False,
@@ -342,11 +348,18 @@ def main():
     check_mode = args_dict.get("check_mode", False)
 
     if not skip_env_check:
-        from unilabos.utils.environment_check import check_environment
+        from unilabos.utils.environment_check import check_environment, check_device_package_requirements
 
         if not check_environment(auto_install=True):
             print_status("环境检查失败，程序退出", "error")
             os._exit(1)
+
+        # 第一次设备包依赖检查：build_registry 之前，确保 import map 可用
+        devices_dirs_for_req = args_dict.get("devices", None)
+        if devices_dirs_for_req:
+            if not check_device_package_requirements(devices_dirs_for_req):
+                print_status("设备包依赖检查失败，程序退出", "error")
+                os._exit(1)
     else:
         print_status("跳过环境依赖检查", "warning")
 
@@ -477,19 +490,7 @@ def main():
     BasicConfig.vis_2d_enable = args_dict["2d_vis"]
     BasicConfig.check_mode = check_mode
 
-    from unilabos.resources.graphio import (
-        read_node_link_json,
-        read_graphml,
-        dict_from_graph,
-    )
-    from unilabos.app.communication import get_communication_client
     from unilabos.registry.registry import build_registry
-    from unilabos.app.backend import start_backend
-    from unilabos.app.web import http_client
-    from unilabos.app.web import start_server
-    from unilabos.app.register import register_devices_and_resources
-    from unilabos.resources.graphio import modify_to_backend_format
-    from unilabos.resources.resource_tracker import ResourceTreeSet, ResourceDict
 
     # 显示启动横幅
     print_unilab_banner(args_dict)
@@ -498,12 +499,14 @@ def main():
     # check_mode 和 upload_registry 都会执行实际 import 验证
     devices_dirs = args_dict.get("devices", None)
     complete_registry = args_dict.get("complete_registry", False) or check_mode
+    external_only = args_dict.get("external_devices_only", False)
     lab_registry = build_registry(
         registry_paths=args_dict["registry_path"],
         devices_dirs=devices_dirs,
         upload_registry=BasicConfig.upload_registry,
         check_mode=check_mode,
         complete_registry=complete_registry,
+        external_only=external_only,
     )
 
     # Check mode: 注册表验证完成后直接退出
@@ -512,6 +515,20 @@ def main():
         resource_count = len(lab_registry.resource_type_registry)
         print_status(f"Check mode: 注册表验证完成 ({device_count} 设备, {resource_count} 资源)，退出", "info")
         os._exit(0)
+
+    # 以下导入依赖 ROS2 环境，check_mode 已退出不需要
+    from unilabos.resources.graphio import (
+        read_node_link_json,
+        read_graphml,
+        dict_from_graph,
+        modify_to_backend_format,
+    )
+    from unilabos.app.communication import get_communication_client
+    from unilabos.app.backend import start_backend
+    from unilabos.app.web import http_client
+    from unilabos.app.web import start_server
+    from unilabos.app.register import register_devices_and_resources
+    from unilabos.resources.resource_tracker import ResourceTreeSet, ResourceDict
 
     # Step 1: 上传全部注册表到服务端，同步保存到 unilabos_data
     if BasicConfig.upload_registry:
@@ -609,6 +626,10 @@ def main():
         remote_tree_set = ResourceTreeSet.from_raw_dict_list(request_startup_json["nodes"])
         resource_tree_set.merge_remote_resources(remote_tree_set)
         print_status("远端物料同步完成", "info")
+
+    # 第二次设备包依赖检查：云端物料同步后，community 包可能引入新的 requirements
+    # TODO: 当 community device package 功能上线后，在这里调用
+    #   install_requirements_txt(community_pkg_path / "requirements.txt", label="community.xxx")
 
     # 使用 ResourceTreeSet 代替 list
     args_dict["resources_config"] = resource_tree_set

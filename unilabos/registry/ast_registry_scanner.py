@@ -139,6 +139,7 @@ def scan_directory(
     executor: ThreadPoolExecutor = None,
     exclude_files: Optional[set] = None,
     cache: Optional[Dict[str, Any]] = None,
+    include_files: Optional[List[Union[str, Path]]] = None,
 ) -> Dict[str, Any]:
     """
     Recursively scan .py files under *root_dir* for @device and @resource
@@ -164,6 +165,7 @@ def scan_directory(
         exclude_files: 要排除的文件名集合 (如 {"lab_resources.py"})
         cache: Mutable cache dict (``load_scan_cache()`` result). Hits are read
                from here; misses are written back so the caller can persist later.
+        include_files: 指定扫描的文件列表，提供时跳过目录递归收集，直接扫描这些文件。
     """
     if executor is None:
         raise ValueError("executor is required and must not be None")
@@ -175,7 +177,10 @@ def scan_directory(
         python_path = Path(python_path).resolve()
 
     # --- Collect files (depth/count limited) ---
-    py_files = _collect_py_files(root_dir, max_depth=max_depth, max_files=max_files, exclude_files=exclude_files)
+    if include_files is not None:
+        py_files = [Path(f).resolve() for f in include_files if Path(f).resolve().exists()]
+    else:
+        py_files = _collect_py_files(root_dir, max_depth=max_depth, max_files=max_files, exclude_files=exclude_files)
 
     cache_files: Dict[str, Any] = cache.get("files", {}) if cache else {}
 

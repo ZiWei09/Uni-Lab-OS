@@ -112,7 +112,7 @@ class Registry:
     # 统一入口
     # ------------------------------------------------------------------
 
-    def setup(self, devices_dirs=None, upload_registry=False, complete_registry=False):
+    def setup(self, devices_dirs=None, upload_registry=False, complete_registry=False, external_only=False):
         """统一构建注册表入口。"""
         if self._setup_called:
             logger.critical("[UniLab Registry] setup方法已被调用过，不允许多次调用")
@@ -123,24 +123,27 @@ class Registry:
         )
 
         # 1. AST 静态扫描 (快速, 无需 import)
-        self._run_ast_scan(devices_dirs, upload_registry=upload_registry)
+        self._run_ast_scan(devices_dirs, upload_registry=upload_registry, external_only=external_only)
 
         # 2. Host node 内置设备
         self._setup_host_node()
 
-        # 3. YAML 注册表加载 (兼容旧格式)
-        self.registry_paths = [Path(path).absolute() for path in self.registry_paths]
-        for i, path in enumerate(self.registry_paths):
-            sys_path = path.parent
-            logger.trace(f"[UniLab Registry] Path {i+1}/{len(self.registry_paths)}: {sys_path}")
-            sys.path.append(str(sys_path))
-            self.load_device_types(path, complete_registry=complete_registry)
-            if BasicConfig.enable_resource_load:
-                self.load_resource_types(path, upload_registry, complete_registry=complete_registry)
-            else:
-                logger.warning(
-                    "[UniLab Registry] 资源加载已禁用 (enable_resource_load=False)，跳过资源注册表加载"
-                )
+        # 3. YAML 注册表加载 (兼容旧格式) — external_only 模式下跳过
+        if external_only:
+            logger.info("[UniLab Registry] external_only 模式: 跳过 YAML 注册表加载")
+        else:
+            self.registry_paths = [Path(path).absolute() for path in self.registry_paths]
+            for i, path in enumerate(self.registry_paths):
+                sys_path = path.parent
+                logger.trace(f"[UniLab Registry] Path {i+1}/{len(self.registry_paths)}: {sys_path}")
+                sys.path.append(str(sys_path))
+                self.load_device_types(path, complete_registry=complete_registry)
+                if BasicConfig.enable_resource_load:
+                    self.load_resource_types(path, upload_registry, complete_registry=complete_registry)
+                else:
+                    logger.warning(
+                        "[UniLab Registry] 资源加载已禁用 (enable_resource_load=False)，跳过资源注册表加载"
+                    )
         self._startup_executor.shutdown(wait=True)
         self._startup_executor = None
         self._setup_called = True
@@ -253,7 +256,7 @@ class Registry:
     # AST 静态扫描
     # ------------------------------------------------------------------
 
-    def _run_ast_scan(self, devices_dirs=None, upload_registry=False):
+    def _run_ast_scan(self, devices_dirs=None, upload_registry=False, external_only=False):
         """
         执行 AST 静态扫描，从 Python 代码中提取 @device / @resource 装饰器元数据。
         无需 import 任何驱动模块，速度极快。
@@ -298,16 +301,30 @@ class Registry:
                 extra_dirs.append(d_path)
 
         # 主扫描
-        exclude_files = {"lab_resources.py"} if not BasicConfig.extra_resource else None
-        scan_result = scan_directory(
-            scan_root, python_path=python_path, executor=self._startup_executor,
-            exclude_files=exclude_files, cache=ast_cache,
-        )
-        if exclude_files:
-            logger.info(
-                f"[UniLab Registry] 排除扫描文件: {exclude_files} "
-                f"(可通过 --extra_resource 启用加载)"
+        if external_only:
+            core_files = [
+                pkg_root / "ros" / "nodes" / "presets" / "host_node.py",
+                pkg_root / "resources" / "container.py",
+            ]
+            scan_result = scan_directory(
+                scan_root, python_path=python_path, executor=self._startup_executor,
+                cache=ast_cache, include_files=core_files,
             )
+            logger.info(
+                f"[UniLab Registry] external_only 模式: 仅扫描核心文件 "
+                f"({', '.join(f.name for f in core_files)})"
+            )
+        else:
+            exclude_files = {"lab_resources.py"} if not BasicConfig.extra_resource else None
+            scan_result = scan_directory(
+                scan_root, python_path=python_path, executor=self._startup_executor,
+                exclude_files=exclude_files, cache=ast_cache,
+            )
+            if exclude_files:
+                logger.info(
+                    f"[UniLab Registry] 排除扫描文件: {exclude_files} "
+                    f"(可通过 --extra_resource 启用加载)"
+                )
 
         # 合并缓存统计
         total_stats = scan_result.pop("_cache_stats", {"hits": 0, "misses": 0, "total": 0})
@@ -1534,9 +1551,9 @@ class Registry:
                 del resource_info["config_info"]
             if "file_path" in resource_info:
                 del resource_info["file_path"]
-            complete_data[resource_id] = copy.deepcopy(dict(sorted(resource_info.items())))
             resource_info["registry_type"] = "resource"
             resource_info["file_path"] = str(file.absolute()).replace("\\", "/")
+            complete_data[resource_id] = copy.deepcopy(dict(sorted(resource_info.items())))
 
         for rid in skip_ids:
             data.pop(rid, None)
@@ -2175,7 +2192,7 @@ class Registry:
 lab_registry = Registry()
 
 
-def build_registry(registry_paths=None, devices_dirs=None, upload_registry=False, check_mode=False, complete_registry=False):
+def build_registry(registry_paths=None, devices_dirs=None, upload_registry=False, check_mode=False, complete_registry=False, external_only=False):
     """
     构建或获取Registry单例实例
     """
@@ -2189,7 +2206,7 @@ def build_registry(registry_paths=None, devices_dirs=None, upload_registry=False
             if path not in current_paths:
                 lab_registry.registry_paths.append(path)
 
-    lab_registry.setup(devices_dirs=devices_dirs, upload_registry=upload_registry, complete_registry=complete_registry)
+    lab_registry.setup(devices_dirs=devices_dirs, upload_registry=upload_registry, complete_registry=complete_registry, external_only=external_only)
 
     # 将 AST 扫描的字符串类型替换为实际 ROS2 消息类（仅查找 ROS2 类型，不 import 设备模块）
     lab_registry.resolve_all_types()
