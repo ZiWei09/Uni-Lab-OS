@@ -33,6 +33,8 @@ from unilabos.registry.decorators import (
     is_not_action,
     is_always_free,
     get_topic_config,
+    NodeType,
+    normalize_enum_value,
 )
 from unilabos.registry.utils import (
     ROSMsgNotFound,
@@ -159,9 +161,10 @@ class Registry:
         ast_entry = self.device_type_registry.get("host_node", {})
         ast_actions = ast_entry.get("class", {}).get("action_value_mappings", {})
 
-        # 取出 AST 生成的 auto-method entries, 补充特定覆写
+        # 取出 AST 生成的 action entries, 补充特定覆写
         test_latency_action = ast_actions.get("auto-test_latency", {})
         test_resource_action = ast_actions.get("auto-test_resource", {})
+        manual_confirm_action = ast_actions.get("manual_confirm", {})
         test_resource_action["handles"] = {
             "input": [
                 {
@@ -237,6 +240,7 @@ class Registry:
                     },
                     "test_latency": test_latency_action,
                     "auto-test_resource": test_resource_action,
+                    "manual_confirm": manual_confirm_action,
                 },
                 "init_params": {},
             },
@@ -847,6 +851,9 @@ class Registry:
             }
             if (action_args or {}).get("always_free") or method_info.get("always_free"):
                 entry["always_free"] = True
+            nt = normalize_enum_value((action_args or {}).get("node_type"), NodeType)
+            if nt:
+                entry["node_type"] = nt
             return action_name, entry
 
         # 1) auto- actions
@@ -971,6 +978,9 @@ class Registry:
             }
             if action_args.get("always_free") or method_info.get("always_free"):
                 action_entry["always_free"] = True
+            nt = normalize_enum_value(action_args.get("node_type"), NodeType)
+            if nt:
+                action_entry["node_type"] = nt
             action_value_mappings[action_name] = action_entry
 
         action_value_mappings = dict(sorted(action_value_mappings.items()))
@@ -1153,7 +1163,7 @@ class Registry:
             return Path(BasicConfig.working_dir) / "registry_cache.pkl"
         return None
 
-    _CACHE_VERSION = 3
+    _CACHE_VERSION = 4
 
     def _load_config_cache(self) -> dict:
         import pickle
@@ -1878,6 +1888,9 @@ class Registry:
                         }
                         if v.get("always_free"):
                             entry["always_free"] = True
+                        old_node_type = old_cfg.get("node_type")
+                        if old_node_type in [NodeType.ILAB.value, NodeType.MANUAL_CONFIRM.value]:
+                            entry["node_type"] = old_node_type
                         device_config["class"]["action_value_mappings"][action_key] = entry
 
                     device_config["init_param_schema"] = {}

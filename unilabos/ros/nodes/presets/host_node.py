@@ -24,7 +24,7 @@ from unilabos_msgs.srv import (
 from unilabos_msgs.srv._serial_command import SerialCommand_Request, SerialCommand_Response
 from unique_identifier_msgs.msg import UUID
 
-from unilabos.registry.decorators import device
+from unilabos.registry.decorators import device, action, NodeType
 from unilabos.registry.placeholder_type import ResourceSlot, DeviceSlot
 from unilabos.registry.registry import lab_registry
 from unilabos.resources.container import RegularContainer
@@ -1620,6 +1620,10 @@ class HostNode(BaseROS2DeviceNode):
             "status": "success",
         }
         return res
+
+    @action(always_free=True, node_type=NodeType.MANUAL_CONFIRM)
+    def manual_confirm(self, **kwargs) -> dict:
+        return kwargs
 
     def test_resource(
         self,
