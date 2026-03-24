@@ -64,7 +64,8 @@ coincellassemblyworkstation_device:
               properties: {}
               required: []
               type: object
-            result: {}
+            result:
+              type: boolean
           required:
           - goal
           title: fun_wuliao_test参数
@@ -109,7 +110,8 @@ coincellassemblyworkstation_device:
               - elec_num
               - elec_use_num
               type: object
-            result: {}
+            result:
+              type: object
           required:
           - goal
           title: func_allpack_cmd参数
@@ -220,7 +222,8 @@ coincellassemblyworkstation_device:
               - elec_num
               - elec_use_num
               type: object
-            result: {}
+            result:
+              type: object
           required:
           - goal
           title: func_allpack_cmd_simp参数
@@ -309,7 +312,8 @@ coincellassemblyworkstation_device:
                   type: boolean
               required: []
               type: object
-            result: {}
+            result:
+              type: boolean
           required:
           - goal
           title: func_pack_device_init_auto_start_combined参数
@@ -351,7 +355,8 @@ coincellassemblyworkstation_device:
               properties: {}
               required: []
               type: object
-            result: {}
+            result:
+              type: boolean
           required:
           - goal
           title: func_pack_device_stop参数
@@ -376,7 +381,8 @@ coincellassemblyworkstation_device:
                   type: string
               required: []
               type: object
-            result: {}
+            result:
+              type: boolean
           required:
           - goal
           title: func_pack_get_msg_cmd参数
@@ -430,7 +436,8 @@ coincellassemblyworkstation_device:
               properties: {}
               required: []
               type: object
-            result: {}
+            result:
+              type: boolean
           required:
           - goal
           title: func_pack_send_finished_cmd参数
@@ -467,7 +474,8 @@ coincellassemblyworkstation_device:
               - assembly_type
               - assembly_pressure
               type: object
-            result: {}
+            result:
+              type: boolean
           required:
           - goal
           title: func_pack_send_msg_cmd参数
@@ -611,7 +619,8 @@ coincellassemblyworkstation_device:
               - elec_num
               - elec_use_num
               type: object
-            result: {}
+            result:
+              type: object
           required:
           - goal
           title: func_sendbottle_allpack_multi参数
@@ -663,31 +672,6 @@ coincellassemblyworkstation_device:
           title: modify_deck_name参数
           type: object
         type: UniLabJsonCommand
-      auto-post_init:
-        feedback: {}
-        goal: {}
-        goal_default:
-          ros_node: null
-        handles: {}
-        placeholder_keys: {}
-        result: {}
-        schema:
-          description: ''
-          properties:
-            feedback: {}
-            goal:
-              properties:
-                ros_node:
-                  type: object
-              required:
-              - ros_node
-              type: object
-            result: {}
-          required:
-          - goal
-          title: post_init参数
-          type: object
-        type: UniLabJsonCommand
       auto-qiming_coin_cell_code:
         feedback: {}
         goal: {}
@@ -735,7 +719,8 @@ coincellassemblyworkstation_device:
               required:
               - fujipian_panshu
               type: object
-            result: {}
+            result:
+              type: boolean
           required:
           - goal
           title: qiming_coin_cell_code参数
@@ -826,25 +811,24 @@ coincellassemblyworkstation_device:
         sys_status:
           type: string
       required:
-      - sys_status
-      - sys_mode
-      - request_rec_msg_status
-      - request_send_msg_status
       - data_assembly_coin_cell_num
+      - data_assembly_pressure
       - data_assembly_time
-      - data_open_circuit_voltage
       - data_axis_x_pos
       - data_axis_y_pos
       - data_axis_z_pos
-      - data_pole_weight
-      - data_assembly_pressure
-      - data_electrolyte_volume
-      - data_coin_num
       - data_coin_cell_code
+      - data_coin_num
       - data_electrolyte_code
-      - data_glove_box_pressure
+      - data_electrolyte_volume
       - data_glove_box_o2_content
+      - data_glove_box_pressure
       - data_glove_box_water_content
+      - data_open_circuit_voltage
+      - data_pole_weight
+      - request_rec_msg_status
+      - request_send_msg_status
+      - sys_mode
+      - sys_status
       type: object
-  registry_type: device
   version: 1.0.0

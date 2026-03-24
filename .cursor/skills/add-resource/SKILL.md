@@ -1,17 +1,15 @@
 ---
 name: add-resource
-description: Guide for adding new resources (materials, bottles, carriers, decks, warehouses) to Uni-Lab-OS (添加新物料/资源). Covers Bottle, Carrier, Deck, WareHouse definitions and registry YAML. Use when the user wants to add resources, define materials, create a deck layout, add bottles/carriers/plates, or mentions 物料/资源/resource/bottle/carrier/deck/plate/warehouse.
+description: Guide for adding new resources (materials, bottles, carriers, decks, warehouses) to Uni-Lab-OS (添加新物料/资源). Uses @resource decorator for AST auto-scanning. Covers Bottle, Carrier, Deck, WareHouse definitions. Use when the user wants to add resources, define materials, create a deck layout, add bottles/carriers/plates, or mentions 物料/资源/resource/bottle/carrier/deck/plate/warehouse.
 ---
 
 # 添加新物料资源
 
-Uni-Lab-OS 的资源体系基于 PyLabRobot，通过扩展实现 Bottle、Carrier、WareHouse、Deck 等实验室物料管理。
+Uni-Lab-OS 的资源体系基于 PyLabRobot，通过扩展实现 Bottle、Carrier、WareHouse、Deck 等实验室物料管理。使用 `@resource` 装饰器注册，AST 自动扫描生成注册表条目。
 
 ---
 
-## 第一步：确认资源类型
-
-向用户确认需要添加的资源类型：
+## 资源类型
 
 | 类型 | 基类 | 用途 | 示例 |
 |------|------|------|------|
@@ -22,350 +20,332 @@ Uni-Lab-OS 的资源体系基于 PyLabRobot，通过扩展实现 Bottle、Carrie
 
 **层级关系：** `Deck` → `WareHouse` → `BottleCarrier` → `Bottle`
 
-还需确认：
-- 资源所属的项目/场景（如 bioyond、battery、通用）
-- 尺寸参数（直径、高度、最大容积等）
-- 布局参数（行列数、间距等）
+WareHouse 本质上和 Site 是同一概念 — 都是定义一组固定的放置位（slot），只不过 WareHouse 多嵌套了一层 Deck。两者都需要开发者根据实际物理尺寸自行计算各 slot 的偏移坐标。
 
 ---
 
-## 第二步：创建资源定义
-
-### 文件位置
-
-```
-unilabos/resources/
-├── <project>/          # 按项目分组
-│   ├── bottles.py      # Bottle 工厂函数
-│   ├── bottle_carriers.py  # Carrier 工厂函数
-│   ├── warehouses.py   # WareHouse 工厂函数
-│   └── decks.py        # Deck 类定义
-├── itemized_carrier.py # Bottle, BottleCarrier, ItemizedCarrier 基类
-├── warehouse.py        # WareHouse 基类
-└── container.py        # 通用容器
-```
-
-### 2A. 添加 Bottle（工厂函数）
+## @resource 装饰器
 
 ```python
+from unilabos.registry.decorators import resource
+
+@resource(
+    id="my_resource_id",        # 注册表唯一标识（必填）
+    category=["bottles"],       # 分类标签列表（必填）
+    description="资源描述",
+    icon="",                    # 图标
+    version="1.0.0",
+    handles=[...],              # 端口列表（InputHandle / OutputHandle）
+    model={...},                # 3D 模型配置
+    class_type="pylabrobot",    # "python" / "pylabrobot" / "unilabos"
+)
+```
+
+---
+
+## 创建规范
+
+### 命名规则
+
+1. **`name` 参数作为前缀**：所有工厂函数必须接受 `name: str` 参数，创建子物料时以 `name` 作为前缀，确保实例名在运行时全局唯一
+2. **Bottle 命名约定**：试剂瓶-Bottle，烧杯-Beaker，烧瓶-Flask，小瓶-Vial
+3. **函数名 = `@resource(id=...)`**：工厂函数名与注册表 id 保持一致
+
+### 子物料命名示例
+
+```python
+# Carrier 内部的 sites 用 name 前缀
+for k, v in sites.items():
+    v.name = f"{name}_{v.name}"     # "堆栈1左_A01", "堆栈1左_B02" ...
+
+# Carrier 中放置 Bottle 时用 name 前缀
+carrier[0] = My_Reagent_Bottle(f"{name}_flask_1")    # "堆栈1左_flask_1"
+carrier[i] = My_Solid_Vial(f"{name}_vial_{ordering[i]}")  # "堆栈1左_vial_A1"
+
+# create_homogeneous_resources 使用 name_prefix
+sites=create_homogeneous_resources(
+    klass=ResourceHolder,
+    locations=[...],
+    name_prefix=name,  # 自动生成 "{name}_0", "{name}_1" ...
+)
+
+# Deck setup 中用仓库名称作为 name 传入
+self.warehouses = {
+    "堆栈1左": my_warehouse_4x4("堆栈1左"),   # WareHouse.name = "堆栈1左"
+    "试剂堆栈": my_reagent_stack("试剂堆栈"),  # WareHouse.name = "试剂堆栈"
+}
+```
+
+### 其他规范
+
+- **max_volume 单位为 μL**：500mL = 500000
+- **尺寸单位为 mm**：`diameter`, `height`, `size_x/y/z`, `dx/dy/dz`
+- **BottleCarrier 必须设置 `num_items_x/y/z`**：用于前端渲染布局
+- **Deck 的 `__init__` 必须接受 `setup=False`**：图文件中 `config.setup=true` 触发 `setup()`
+- **按项目分组文件**：同一工作站的资源放在 `unilabos/resources/<project>/` 下
+- **`__init__` 必须接受 `serialize()` 输出的所有字段**：`serialize()` 输出会作为 `config` 回传到 `__init__`，因此必须通过显式参数或 `**kwargs` 接受，否则反序列化会报错
+- **持久化运行时状态用 `serialize_state()`**：通过 `_unilabos_state` 字典存储可变信息（如物料内容、液体量），只存 JSON 可序列化的基本类型
+
+---
+
+## 资源模板
+
+### Bottle
+
+```python
+from unilabos.registry.decorators import resource
 from unilabos.resources.itemized_carrier import Bottle
 
 
+@resource(id="My_Reagent_Bottle", category=["bottles"], description="我的试剂瓶")
 def My_Reagent_Bottle(
     name: str,
-    diameter: float = 70.0,     # 瓶体直径 (mm)
-    height: float = 120.0,      # 瓶体高度 (mm)
-    max_volume: float = 500000.0,  # 最大容积 (μL)
+    diameter: float = 70.0,
+    height: float = 120.0,
+    max_volume: float = 500000.0,
     barcode: str = None,
 ) -> Bottle:
-    """创建试剂瓶"""
     return Bottle(
         name=name,
         diameter=diameter,
         height=height,
         max_volume=max_volume,
         barcode=barcode,
-        model="My_Reagent_Bottle",  # 唯一标识，用于注册表和物料映射
+        model="My_Reagent_Bottle",
     )
 ```
 
 **Bottle 参数：**
-- `name`: 实例名称（运行时唯一）
+- `name`: 实例名称（运行时唯一，由上层 Carrier 以前缀方式传入）
 - `diameter`: 瓶体直径 (mm)
 - `height`: 瓶体高度 (mm)
-- `max_volume`: 最大容积 (**μL**，注意单位！500mL = 500000)
+- `max_volume`: 最大容积（**μL**，500mL = 500000）
 - `barcode`: 条形码（可选）
-- `model`: 模型标识，与注册表 key 一致
 
-### 2B. 添加 BottleCarrier（工厂函数）
+### BottleCarrier
 
 ```python
 from pylabrobot.resources import ResourceHolder
 from pylabrobot.resources.carrier import create_ordered_items_2d
-
 from unilabos.resources.itemized_carrier import BottleCarrier
+from unilabos.registry.decorators import resource
 
 
+@resource(id="My_6SlotCarrier", category=["bottle_carriers"], description="六槽位载架")
 def My_6SlotCarrier(name: str) -> BottleCarrier:
-    """创建 3x2 六槽位载架"""
     sites = create_ordered_items_2d(
         klass=ResourceHolder,
-        num_items_x=3,       # 列数
-        num_items_y=2,       # 行数
-        dx=10.0,             # X 起始偏移
-        dy=10.0,             # Y 起始偏移
-        dz=5.0,              # Z 偏移
-        item_dx=42.0,        # X 间距
-        item_dy=35.0,        # Y 间距
-        size_x=20.0,         # 槽位宽
-        size_y=20.0,         # 槽位深
-        size_z=50.0,         # 槽位高
+        num_items_x=3, num_items_y=2,
+        dx=10.0, dy=10.0, dz=5.0,
+        item_dx=42.0, item_dy=35.0,
+        size_x=20.0, size_y=20.0, size_z=50.0,
     )
+    # 子 site 用 name 作为前缀
+    for k, v in sites.items():
+        v.name = f"{name}_{v.name}"
+
     carrier = BottleCarrier(
-        name=name,
-        size_x=146.0,        # 载架总宽
-        size_y=80.0,         # 载架总深
-        size_z=55.0,         # 载架总高
-        sites=sites,
-        model="My_6SlotCarrier",
+        name=name, size_x=146.0, size_y=80.0, size_z=55.0,
+        sites=sites, model="My_6SlotCarrier",
     )
     carrier.num_items_x = 3
     carrier.num_items_y = 2
     carrier.num_items_z = 1
 
-    # 预装 Bottle（可选）
-    ordering = ["A01", "A02", "A03", "B01", "B02", "B03"]
+    # 放置 Bottle 时用 name 作为前缀
+    ordering = ["A1", "B1", "A2", "B2", "A3", "B3"]
     for i in range(6):
-        carrier[i] = My_Reagent_Bottle(f"{ordering[i]}")
-
+        carrier[i] = My_Reagent_Bottle(f"{name}_vial_{ordering[i]}")
     return carrier
 ```
 
-### 2C. 添加 WareHouse（工厂函数）
+### WareHouse / Deck 放置位
+
+WareHouse 和 Site 本质上是同一概念：都是定义一组固定放置位（slot），根据物理尺寸自行批量计算偏移坐标。WareHouse 只是多嵌套了一层 Deck 而已。推荐开发者直接根据实物测量数据计算各 slot 偏移量。
+
+#### WareHouse（使用 warehouse_factory）
 
 ```python
 from unilabos.resources.warehouse import warehouse_factory
+from unilabos.registry.decorators import resource
 
 
+@resource(id="my_warehouse_4x4", category=["warehouse"], description="4x4 堆栈仓库")
 def my_warehouse_4x4(name: str) -> "WareHouse":
-    """创建 4行x4列 堆栈仓库"""
     return warehouse_factory(
         name=name,
-        num_items_x=4,            # 列数
-        num_items_y=4,            # 行数
-        num_items_z=1,            # 层数（通常为 1）
-        dx=137.0,                 # X 起始偏移
-        dy=96.0,                  # Y 起始偏移
-        dz=120.0,                 # Z 起始偏移
-        item_dx=137.0,            # X 间距
-        item_dy=125.0,            # Y 间距
-        item_dz=10.0,             # Z 间距（多层时用）
-        resource_size_x=127.0,    # 槽位宽
-        resource_size_y=85.0,     # 槽位深
-        resource_size_z=100.0,    # 槽位高
+        num_items_x=4, num_items_y=4, num_items_z=1,
+        dx=10.0, dy=10.0, dz=10.0,             # 第一个 slot 的起始偏移
+        item_dx=147.0, item_dy=106.0, item_dz=130.0,  # slot 间距
+        resource_size_x=127.0, resource_size_y=85.0, resource_size_z=100.0,  # slot 尺寸
         model="my_warehouse_4x4",
+        col_offset=0,       # 列标签起始偏移（0 → A01, 4 → A05）
+        layout="row-major",  # "row-major" 行优先 / "col-major" 列优先 / "vertical-col-major" 竖向
     )
 ```
 
-**`warehouse_factory` 参数说明：**
+`warehouse_factory` 参数说明：
+- `dx/dy/dz`：第一个 slot 相对 WareHouse 原点的偏移（mm）
+- `item_dx/item_dy/item_dz`：相邻 slot 间距（mm），需根据实际物理间距测量
+- `resource_size_x/y/z`：每个 slot 的可放置区域尺寸
+- `layout`：影响 slot 标签和坐标映射
+  - `"row-major"`：A01,A02,...,B01,B02,...（行优先，适合横向排列）
+  - `"col-major"`：A01,B01,...,A02,B02,...（列优先）
+  - `"vertical-col-major"`：竖向排列，y 坐标反向
 
-| 参数 | 说明 |
-|------|------|
-| `num_items_x/y/z` | 列数/行数/层数 |
-| `dx, dy, dz` | 第一个槽位的起始坐标偏移 |
-| `item_dx, item_dy, item_dz` | 相邻槽位间距 |
-| `resource_size_x/y/z` | 单个槽位的物理尺寸 |
-| `col_offset` | 列命名偏移（如设 4 则从 A05 开始） |
-| `row_offset` | 行命名偏移（如设 5 则从 F 行开始） |
-| `layout` | 排序方式：`"col-major"`（列优先，默认）/ `"row-major"`（行优先） |
-| `removed_positions` | 要移除的位置索引列表 |
+#### Deck 组装 WareHouse
 
-自动生成 `ResourceHolder` 槽位，命名规则为 `A01, B01, C01, D01, A02, ...`（列优先）或 `A01, A02, A03, A04, B01, ...`（行优先）。
-
-### 2D. 添加 Deck（类定义）
+Deck 通过 `setup()` 将多个 WareHouse 放置到指定坐标：
 
 ```python
 from pylabrobot.resources import Deck, Coordinate
+from unilabos.registry.decorators import resource
 
 
+@resource(id="MyStation_Deck", category=["deck"], description="我的工作站 Deck")
 class MyStation_Deck(Deck):
-    def __init__(
-        self,
-        name: str = "MyStation_Deck",
-        size_x: float = 2700.0,
-        size_y: float = 1080.0,
-        size_z: float = 1500.0,
-        category: str = "deck",
-        setup: bool = False,
-    ) -> None:
+    def __init__(self, name="MyStation_Deck", size_x=2700.0, size_y=1080.0, size_z=1500.0,
+                 category="deck", setup=False, **kwargs) -> None:
         super().__init__(name=name, size_x=size_x, size_y=size_y, size_z=size_z)
         if setup:
             self.setup()
 
     def setup(self) -> None:
         self.warehouses = {
-            "仓库A": my_warehouse_4x4("仓库A"),
-            "仓库B": my_warehouse_4x4("仓库B"),
+            "堆栈1左": my_warehouse_4x4("堆栈1左"),
+            "堆栈1右": my_warehouse_4x4("堆栈1右"),
         }
         self.warehouse_locations = {
-            "仓库A": Coordinate(-200.0, 400.0, 0.0),
-            "仓库B": Coordinate(2350.0, 400.0, 0.0),
+            "堆栈1左": Coordinate(-200.0, 400.0, 0.0),  # 自行测量计算
+            "堆栈1右": Coordinate(2350.0, 400.0, 0.0),
         }
         for wh_name, wh in self.warehouses.items():
             self.assign_child_resource(wh, location=self.warehouse_locations[wh_name])
 ```
 
-**Deck 要点：**
-- 继承 `pylabrobot.resources.Deck`
-- `setup()` 创建 WareHouse 并通过 `assign_child_resource` 放置到指定坐标
-- `setup` 参数控制是否在构造时自动调用 `setup()`（图文件中通过 `config.setup: true` 触发）
+#### Site 模式（前端定向放置）
 
----
-
-## 第三步：创建注册表 YAML
-
-路径：`unilabos/registry/resources/<project>/<type>.yaml`
-
-### Bottle 注册
-
-```yaml
-My_Reagent_Bottle:
-  category:
-  - bottles
-  class:
-    module: unilabos.resources.my_project.bottles:My_Reagent_Bottle
-    type: pylabrobot
-  description: 我的试剂瓶
-  handles: []
-  icon: ''
-  init_param_schema: {}
-  version: 1.0.0
-```
-
-### Carrier 注册
-
-```yaml
-My_6SlotCarrier:
-  category:
-  - bottle_carriers
-  class:
-    module: unilabos.resources.my_project.bottle_carriers:My_6SlotCarrier
-    type: pylabrobot
-  handles: []
-  icon: ''
-  init_param_schema: {}
-  version: 1.0.0
-```
-
-### Deck 注册
-
-```yaml
-MyStation_Deck:
-  category:
-  - deck
-  class:
-    module: unilabos.resources.my_project.decks:MyStation_Deck
-    type: pylabrobot
-  description: 我的工作站 Deck
-  handles: []
-  icon: ''
-  init_param_schema: {}
-  registry_type: resource
-  version: 1.0.0
-```
-
-**注册表规则：**
-- `class.module` 格式为 `python.module.path:ClassName_or_FunctionName`
-- `class.type` 固定为 `pylabrobot`
-- Key（如 `My_Reagent_Bottle`）必须与工厂函数名 / 类名一致
-- `category` 按类型标注（`bottles`, `bottle_carriers`, `deck` 等）
-
----
-
-## 第四步：在图文件中引用
-
-### Deck 在工作站中的引用
-
-工作站节点通过 `deck` 字段引用，Deck 作为子节点：
-
-```json
-{
-    "id": "my_station",
-    "children": ["my_deck"],
-    "deck": {
-        "data": {
-            "_resource_child_name": "my_deck",
-            "_resource_type": "unilabos.resources.my_project.decks:MyStation_Deck"
-        }
-    }
-},
-{
-    "id": "my_deck",
-    "parent": "my_station",
-    "type": "deck",
-    "class": "MyStation_Deck",
-    "config": {"type": "MyStation_Deck", "setup": true}
-}
-```
-
-### 物料类型映射（外部系统对接时）
-
-如果工作站需要与外部系统同步物料，在 config 中配置 `material_type_mappings`：
-
-```json
-"material_type_mappings": {
-    "My_Reagent_Bottle": ["试剂瓶", "external-type-uuid"],
-    "My_6SlotCarrier": ["六槽载架", "external-type-uuid"]
-}
-```
-
----
-
-## 第五步：注册 PLR 扩展（如需要）
-
-如果添加了新的 Deck 类，需要在 `unilabos/resources/plr_additional_res_reg.py` 中导入，使 `find_subclass` 能发现它：
+适用于有固定孔位/槽位的设备（如移液站 PRCXI 9300），Deck 通过 `sites` 列表定义前端展示的放置位，前端据此渲染可拖拽的孔位布局：
 
 ```python
-def register():
-    from unilabos.resources.my_project.decks import MyStation_Deck
+import collections
+from typing import Any, Dict, List, Optional
+from pylabrobot.resources import Deck, Resource, Coordinate
+from unilabos.registry.decorators import resource
+
+
+@resource(id="MyLabDeck", category=["deck"], description="带 Site 定向放置的 Deck")
+class MyLabDeck(Deck):
+    # 根据设备台面实测批量计算各 slot 坐标偏移
+    _DEFAULT_SITE_POSITIONS = [
+        (0, 0, 0), (138, 0, 0), (276, 0, 0), (414, 0, 0),       # T1-T4
+        (0, 96, 0), (138, 96, 0), (276, 96, 0), (414, 96, 0),   # T5-T8
+    ]
+    _DEFAULT_SITE_SIZE = {"width": 128.0, "height": 86.0, "depth": 0}
+    _DEFAULT_CONTENT_TYPE = ["plate", "tip_rack", "tube_rack", "adaptor"]
+
+    def __init__(self, name: str, size_x: float, size_y: float, size_z: float,
+                 sites: Optional[List[Dict[str, Any]]] = None, **kwargs):
+        super().__init__(size_x, size_y, size_z, name)
+        if sites is not None:
+            self.sites = [dict(s) for s in sites]
+        else:
+            self.sites = []
+            for i, (x, y, z) in enumerate(self._DEFAULT_SITE_POSITIONS):
+                self.sites.append({
+                    "label": f"T{i + 1}",          # 前端显示的槽位标签
+                    "visible": True,                # 是否在前端可见
+                    "position": {"x": x, "y": y, "z": z},  # 槽位物理坐标
+                    "size": dict(self._DEFAULT_SITE_SIZE),  # 槽位尺寸
+                    "content_type": list(self._DEFAULT_CONTENT_TYPE),  # 允许放入的物料类型
+                })
+        self._ordering = collections.OrderedDict(
+            (site["label"], None) for site in self.sites
+        )
+
+    def assign_child_resource(self, resource: Resource,
+                              location: Optional[Coordinate] = None,
+                              reassign: bool = True,
+                              spot: Optional[int] = None):
+        idx = spot
+        if spot is None:
+            for i, site in enumerate(self.sites):
+                if site.get("label") == resource.name:
+                    idx = i
+                    break
+        if idx is None:
+            for i in range(len(self.sites)):
+                if self._get_site_resource(i) is None:
+                    idx = i
+                    break
+        if idx is None:
+            raise ValueError(f"No available site for '{resource.name}'")
+        loc = Coordinate(**self.sites[idx]["position"])
+        super().assign_child_resource(resource, location=loc, reassign=reassign)
+
+    def serialize(self) -> dict:
+        data = super().serialize()
+        sites_out = []
+        for i, site in enumerate(self.sites):
+            occupied = self._get_site_resource(i)
+            sites_out.append({
+                "label": site["label"],
+                "visible": site.get("visible", True),
+                "occupied_by": occupied.name if occupied else None,
+                "position": site["position"],
+                "size": site["size"],
+                "content_type": site["content_type"],
+            })
+        data["sites"] = sites_out
+        return data
+```
+
+**Site 字段说明：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `label` | str | 槽位标签（如 `"T1"`），前端显示名称，也用于匹配 resource.name |
+| `visible` | bool | 是否在前端可见 |
+| `position` | dict | 物理坐标 `{x, y, z}`（mm），需自行测量计算偏移 |
+| `size` | dict | 槽位尺寸 `{width, height, depth}`（mm） |
+| `content_type` | list | 允许放入的物料类型，如 `["plate", "tip_rack", "tube_rack", "adaptor"]` |
+
+**参考实现：** `unilabos/devices/liquid_handling/prcxi/prcxi.py` 中的 `PRCXI9300Deck`（4x4 共 16 个 site）。
+
+---
+
+## 文件位置
+
+```
+unilabos/resources/
+├── <project>/              # 按项目分组
+│   ├── bottles.py          # Bottle 工厂函数
+│   ├── bottle_carriers.py  # Carrier 工厂函数
+│   ├── warehouses.py       # WareHouse 工厂函数
+│   └── decks.py            # Deck 类定义
 ```
 
 ---
 
-## 第六步：验证
+## 验证
 
 ```bash
-# 1. 资源可导入
+# 资源可导入
 python -c "from unilabos.resources.my_project.bottles import My_Reagent_Bottle; print(My_Reagent_Bottle('test'))"
 
-# 2. Deck 可创建
-python -c "
-from unilabos.resources.my_project.decks import MyStation_Deck
-d = MyStation_Deck('test', setup=True)
-print(d.children)
-"
-
-# 3. 启动测试
-unilab -g <graph>.json --complete_registry
+# 启动测试（AST 自动扫描）
+unilab -g <graph>.json
 ```
+
+仅在以下情况仍需 YAML：第三方库资源（如 pylabrobot 内置资源，无 `@resource` 装饰器）。
 
 ---
 
-## 工作流清单
-
-```
-资源接入进度：
-- [ ] 1. 确定资源类型（Bottle / Carrier / WareHouse / Deck）
-- [ ] 2. 创建资源定义（工厂函数/类）
-- [ ] 3. 创建注册表 YAML (unilabos/registry/resources/<project>/<type>.yaml)
-- [ ] 4. 在图文件中引用（如需要）
-- [ ] 5. 注册 PLR 扩展（Deck 类需要）
-- [ ] 6. 验证
-```
-
----
-
-## 高级模式
-
-实现复杂资源系统时，详见 [reference.md](reference.md)：类继承体系完整图、序列化/反序列化流程、Bioyond 物料双向同步、非瓶类资源（ElectrodeSheet / Magazine）、仓库工厂 layout 模式。
-
----
-
-## 现有资源参考
-
-| 项目 | Bottles | Carriers | WareHouses | Decks |
-|------|---------|----------|------------|-------|
-| bioyond | `bioyond/bottles.py` | `bioyond/bottle_carriers.py` | `bioyond/warehouses.py`, `YB_warehouses.py` | `bioyond/decks.py` |
-| battery | — | `battery/bottle_carriers.py` | — | — |
-| 通用 | — | — | `warehouse.py` | — |
-
-### 关键路径
+## 关键路径
 
 | 内容 | 路径 |
 |------|------|
 | Bottle/Carrier 基类 | `unilabos/resources/itemized_carrier.py` |
 | WareHouse 基类 + 工厂 | `unilabos/resources/warehouse.py` |
 | PLR 注册 | `unilabos/resources/plr_additional_res_reg.py` |
-| 资源注册表 | `unilabos/registry/resources/` |
-| 图文件加载 | `unilabos/resources/graphio.py` |
-| 资源跟踪器 | `unilabos/resources/resource_tracker.py` |
+| 装饰器定义 | `unilabos/registry/decorators.py` |

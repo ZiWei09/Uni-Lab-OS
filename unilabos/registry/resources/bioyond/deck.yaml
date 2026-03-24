@@ -8,7 +8,6 @@ BIOYOND_PolymerPreparationStation_Deck:
   handles: []
   icon: 配液站.webp
   init_param_schema: {}
-  registry_type: resource
   version: 1.0.0
 BIOYOND_PolymerReactionStation_Deck:
   category:
@@ -20,7 +19,6 @@ BIOYOND_PolymerReactionStation_Deck:
   handles: []
   icon: 反应站.webp
   init_param_schema: {}
-  registry_type: resource
   version: 1.0.0
 BIOYOND_YB_Deck:
   category:
@@ -32,7 +30,6 @@ BIOYOND_YB_Deck:
   handles: []
   icon: 配液站.webp
   init_param_schema: {}
-  registry_type: resource
   version: 1.0.0
 CoincellDeck:
   category:
@@ -44,5 +41,4 @@ CoincellDeck:
   handles: []
   icon: koudian.webp
   init_param_schema: {}
-  registry_type: resource
   version: 1.0.0
