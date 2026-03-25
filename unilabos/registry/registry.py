@@ -237,6 +237,7 @@ class Registry:
                             "parent": "unilabos_nodes",
                             "class_name": "unilabos_class",
                         },
+                        "always_free": True,
                     },
                     "test_latency": test_latency_action,
                     "auto-test_resource": test_resource_action,

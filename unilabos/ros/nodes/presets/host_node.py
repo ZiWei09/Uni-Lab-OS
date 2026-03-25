@@ -313,7 +313,9 @@ class HostNode(BaseROS2DeviceNode):
                 callback_group=self.callback_group,
             ),
         }  # 用来存储多个ActionClient实例
-        self._action_value_mappings: Dict[str, Dict] = {}  # device_id -> action_value_mappings(本地+远程设备统一存储)
+        self._action_value_mappings: Dict[str, Dict] = {
+            device_id: self._action_value_mappings
+        }  # device_id -> action_value_mappings(本地+远程设备统一存储)
         self._slave_registry_configs: Dict[str, Dict] = {}  # registry_name -> registry_config(含action_value_mappings)
         self._goals: Dict[str, Any] = {}  # 用来存储多个目标的状态
         self._online_devices: Set[str] = {f"{self.namespace}/{device_id}"}  # 用于跟踪在线设备
