@@ -754,6 +754,32 @@ class MessageProcessor:
             req = JobAddReq(**data)
 
             job_log = format_job_log(req.job_id, req.task_id, req.device_id, req.action)
+
+            # 服务端对always_free动作可能跳过query_action_state直接发job_start，
+            # 此时job尚未注册，需要自动补注册
+            existing_job = self.device_manager.get_job_info(req.job_id)
+            if not existing_job:
+                action_name = req.action
+                device_action_key = f"/devices/{req.device_id}/{action_name}"
+                action_always_free = self._check_action_always_free(req.device_id, action_name)
+
+                if action_always_free:
+                    job_info = JobInfo(
+                        job_id=req.job_id,
+                        task_id=req.task_id,
+                        device_id=req.device_id,
+                        action_name=action_name,
+                        device_action_key=device_action_key,
+                        status=JobStatus.QUEUE,
+                        start_time=time.time(),
+                        always_free=True,
+                    )
+                    self.device_manager.add_queue_request(job_info)
+                    logger.info(f"[MessageProcessor] Job {job_log} always_free, auto-registered from direct job_start")
+                else:
+                    logger.error(f"[MessageProcessor] Job {job_log} not registered (missing query_action_state)")
+                    return
+
             success = self.device_manager.start_job(req.job_id)
             if not success:
                 logger.error(f"[MessageProcessor] Failed to start job {job_log}")
