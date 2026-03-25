@@ -163,7 +163,7 @@ python ./scripts/extract_device_actions.py [--registry <path>] <device_id> ./ski
 
 ### Step 4 — 写 SKILL.md
 
-直接复用 `unilab-device-api` 的 API 模板（10 个 endpoint），修改：
+直接复用 `unilab-device-api` 的 API 模板，修改：
 - 设备名称
 - Action 数量
 - 目录列表
@@ -181,15 +181,18 @@ API 模板结构：
 ## 前置条件（缺一不可）
 - ak/sk → AUTH, --addr → BASE URL
 
-## Session State
-- lab_uuid（通过 API #1 自动匹配，不要问用户）, device_name
+## 请求约定
+- Windows 平台必须用 curl.exe（非 PowerShell 的 curl 别名）
 
-## API Endpoints (10 个)
-# 注意：
-# - #1 获取 lab 列表 + 自动匹配 lab_uuid（遍历 is_admin 的 lab，
-#   调用 /lab/info/{uuid} 比对 access_key == ak）
-# - #2 创建工作流用 POST /lab/workflow
-# - #10 获取资源树路径含 lab_uuid: /lab/material/download/{lab_uuid}
+## Session State
+- lab_uuid（通过 GET /edge/lab/info 直接获取，不要问用户）, device_name
+
+## API Endpoints
+# - #1 GET /edge/lab/info → 直接拿到 lab_uuid
+# - #2 创建工作流 POST /lab/workflow/owner → 拼 URL 告知用户
+# - #3 创建节点 POST /edge/workflow/node
+#      body: {workflow_uuid, resource_template_name: "<device_id>", node_template_name: "<action_name>"}
+# - #10 获取资源树 GET /lab/material/download/{lab_uuid}
 
 ## Placeholder Slot 填写规则
 - unilabos_resources → ResourceSlot → {"id":"/path/name","name":"name","uuid":"xxx"}
@@ -206,7 +209,7 @@ API 模板结构：
 ### Step 5 — 验证
 
 检查文件完整性：
-- [ ] `SKILL.md` 包含 10 个 API endpoint
+- [ ] `SKILL.md` 包含 API endpoint（#1 获取 lab_uuid、#2-#9 工作流/动作、#10 资源树）
 - [ ] `SKILL.md` 包含 Placeholder Slot 填写规则（ResourceSlot / DeviceSlot / NodeSlot / ClassSlot + create_resource 特例）和本设备的 Slot 字段表
 - [ ] `action-index.md` 列出所有 action 并有描述
 - [ ] `actions/` 目录中每个 action 有对应 JSON 文件
@@ -249,7 +252,7 @@ API 模板结构：
 ```
 
 > **注意**：`schema` 已由脚本从原始 `schema.properties.goal` 提升为顶层，直接包含参数定义。
-> `schema.properties` 中的字段即为 API 请求 `param.goal` 中的字段。
+> `schema.properties` 中的字段即为 API 创建节点返回的 `data.param` 中的字段，PATCH 更新时直接修改 `param` 即可。
 
 ## Placeholder Slot 类型体系
 
