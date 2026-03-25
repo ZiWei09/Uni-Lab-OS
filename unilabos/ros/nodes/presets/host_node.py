@@ -1621,8 +1621,16 @@ class HostNode(BaseROS2DeviceNode):
         }
         return res
 
-    @action(always_free=True, node_type=NodeType.MANUAL_CONFIRM)
-    def manual_confirm(self, **kwargs) -> dict:
+    @action(always_free=True, node_type=NodeType.MANUAL_CONFIRM, placeholder_keys={
+        "assignee_user_ids": "unilabos_manual_confirm"
+    }, goal_default={
+        "timeout_seconds": 3600,
+        "assignee_user_ids": []
+    })
+    def manual_confirm(self, timeout_seconds: int, assignee_user_ids: list[str], **kwargs) -> dict:
+        """
+        timeout_seconds: 超时时间（秒），默认3600秒
+        """
         return kwargs
 
     def test_resource(
