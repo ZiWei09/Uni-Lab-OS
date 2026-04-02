@@ -188,11 +188,21 @@ API 模板结构：
 - lab_uuid（通过 GET /edge/lab/info 直接获取，不要问用户）, device_name
 
 ## API Endpoints
-# - #1 GET /edge/lab/info → 直接拿到 lab_uuid
-# - #2 创建工作流 POST /lab/workflow/owner → 拼 URL 告知用户
-# - #3 创建节点 POST /edge/workflow/node
-#      body: {workflow_uuid, resource_template_name: "<device_id>", node_template_name: "<action_name>"}
-# - #10 获取资源树 GET /lab/material/download/{lab_uuid}
+# - #1  GET /edge/lab/info → 直接拿到 lab_uuid
+# - #2  创建工作流 POST /lab/workflow/owner → 拼 URL 告知用户
+# - #3  创建节点 POST /edge/workflow/node
+#       body: {workflow_uuid, resource_template_name: "<device_id>", node_template_name: "<action_name>"}
+# - #4  删除节点 DELETE /lab/workflow/nodes
+# - #5  更新节点参数 PATCH /lab/workflow/node
+# - #6  查询节点 handles POST /lab/workflow/node-handles
+#       body: {node_uuids: ["uuid1","uuid2"]} → 返回各节点的 handle_uuid
+# - #7  批量创建边 POST /lab/workflow/edges
+#       body: {edges: [{source_node_uuid, target_node_uuid, source_handle_uuid, target_handle_uuid}]}
+# - #8  启动工作流 POST /lab/workflow/{uuid}/run
+# - #9  运行设备单动作 POST /lab/mcp/run/action
+# - #10 查询任务状态 GET /lab/mcp/task/{task_uuid}
+# - #11 运行工作流单节点 POST /lab/mcp/run/workflow/action
+# - #12 获取资源树 GET /lab/material/download/{lab_uuid}
 
 ## Placeholder Slot 填写规则
 - unilabos_resources → ResourceSlot → {"id":"/path/name","name":"name","uuid":"xxx"}
@@ -209,7 +219,7 @@ API 模板结构：
 ### Step 5 — 验证
 
 检查文件完整性：
-- [ ] `SKILL.md` 包含 API endpoint（#1 获取 lab_uuid、#2-#9 工作流/动作、#10 资源树）
+- [ ] `SKILL.md` 包含 API endpoint（#1 获取 lab_uuid、#2-#7 工作流/节点/边、#8-#11 运行/查询、#12 资源树）
 - [ ] `SKILL.md` 包含 Placeholder Slot 填写规则（ResourceSlot / DeviceSlot / NodeSlot / ClassSlot + create_resource 特例）和本设备的 Slot 字段表
 - [ ] `action-index.md` 列出所有 action 并有描述
 - [ ] `actions/` 目录中每个 action 有对应 JSON 文件
@@ -310,7 +320,7 @@ API 模板结构：
 "container"
 ```
 
-### 通过 API #10 获取资源树
+### 通过 API #12 获取资源树
 
 ```bash
 curl -s -X GET "$BASE/api/v1/lab/material/download/$lab_uuid" -H "$AUTH"
