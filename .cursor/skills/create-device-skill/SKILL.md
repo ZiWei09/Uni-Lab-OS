@@ -203,6 +203,8 @@ API 模板结构：
 # - #10 查询任务状态 GET /lab/mcp/task/{task_uuid}
 # - #11 运行工作流单节点 POST /lab/mcp/run/workflow/action
 # - #12 获取资源树 GET /lab/material/download/{lab_uuid}
+# - #13 获取工作流模板详情 GET /lab/workflow/template/detail/{workflow_uuid}
+#       返回 workflow 完整结构：data.nodes[] 含每个节点的 uuid、name、param、device_name、handles
 
 ## Placeholder Slot 填写规则
 - unilabos_resources → ResourceSlot → {"id":"/path/name","name":"name","uuid":"xxx"}
@@ -219,7 +221,7 @@ API 模板结构：
 ### Step 5 — 验证
 
 检查文件完整性：
-- [ ] `SKILL.md` 包含 API endpoint（#1 获取 lab_uuid、#2-#7 工作流/节点/边、#8-#11 运行/查询、#12 资源树）
+- [ ] `SKILL.md` 包含 API endpoint（#1 获取 lab_uuid、#2-#7 工作流/节点/边、#8-#11 运行/查询、#12 资源树、#13 工作流模板详情）
 - [ ] `SKILL.md` 包含 Placeholder Slot 填写规则（ResourceSlot / DeviceSlot / NodeSlot / ClassSlot + create_resource 特例）和本设备的 Slot 字段表
 - [ ] `action-index.md` 列出所有 action 并有描述
 - [ ] `actions/` 目录中每个 action 有对应 JSON 文件
