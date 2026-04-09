@@ -158,6 +158,7 @@ python ./scripts/extract_device_actions.py [--registry <path>] <device_id> ./ski
   - `unilabos_devices` → **DeviceSlot**，填入路径字符串如 `"/host_node"`（从资源树筛选 type=device）
   - `unilabos_nodes` → **NodeSlot**，填入路径字符串如 `"/PRCXI/PRCXI_Deck"`（资源树中任意节点）
   - `unilabos_class` → **ClassSlot**，填入类名字符串如 `"container"`（从注册表查找）
+  - `unilabos_formulation` → **FormulationSlot**，填入配方数组 `[{well_name, liquids: [{name, volume}]}]`（well_name 为目标物料的 name）
 - array 类型字段 → `[{id, name, uuid}, ...]`
 - 特殊：`create_resource` 的 `res_id`（ResourceSlot）可填不存在的路径
 
@@ -211,6 +212,7 @@ API 模板结构：
 - unilabos_devices → DeviceSlot → "/parent/device" 路径字符串
 - unilabos_nodes → NodeSlot → "/parent/node" 路径字符串
 - unilabos_class → ClassSlot → "class_name" 字符串
+- unilabos_formulation → FormulationSlot → [{well_name, liquids: [{name, volume}]}] 配方数组
 - 特例：create_resource 的 res_id 允许填不存在的路径
 - 列出本设备所有 Slot 字段、类型及含义
 
@@ -222,7 +224,7 @@ API 模板结构：
 
 检查文件完整性：
 - [ ] `SKILL.md` 包含 API endpoint（#1 获取 lab_uuid、#2-#7 工作流/节点/边、#8-#11 运行/查询、#12 资源树、#13 工作流模板详情）
-- [ ] `SKILL.md` 包含 Placeholder Slot 填写规则（ResourceSlot / DeviceSlot / NodeSlot / ClassSlot + create_resource 特例）和本设备的 Slot 字段表
+- [ ] `SKILL.md` 包含 Placeholder Slot 填写规则（ResourceSlot / DeviceSlot / NodeSlot / ClassSlot / FormulationSlot + create_resource 特例）和本设备的 Slot 字段表
 - [ ] `action-index.md` 列出所有 action 并有描述
 - [ ] `actions/` 目录中每个 action 有对应 JSON 文件
 - [ ] JSON 文件包含 `type`, `schema`（已提升为 goal 内容）, `goal`, `goal_default`, `placeholder_keys` 字段
@@ -268,7 +270,7 @@ API 模板结构：
 
 ## Placeholder Slot 类型体系
 
-`placeholder_keys` / `_unilabos_placeholder_info` 中有 4 种值，对应不同的填写方式：
+`placeholder_keys` / `_unilabos_placeholder_info` 中有 5 种值，对应不同的填写方式：
 
 | placeholder 值 | Slot 类型 | 填写格式 | 选取范围 |
 |---------------|-----------|---------|---------|
@@ -276,6 +278,7 @@ API 模板结构：
 | `unilabos_devices` | DeviceSlot | `"/parent/device_name"` | 仅**设备**节点（type=device），路径字符串 |
 | `unilabos_nodes` | NodeSlot | `"/parent/node_name"` | **设备 + 物料**，即所有节点，路径字符串 |
 | `unilabos_class` | ClassSlot | `"class_name"` | 注册表中已上报的资源类 name |
+| `unilabos_formulation` | FormulationSlot | `[{well_name, liquids: [{name, volume}]}]` | 资源树中物料节点的 **name**，配合液体配方 |
 
 ### ResourceSlot（`unilabos_resources`）
 
@@ -321,6 +324,40 @@ API 模板结构：
 ```
 "container"
 ```
+
+### FormulationSlot（`unilabos_formulation`）
+
+描述**液体配方**：向哪些物料容器中加入哪些液体及体积。填写为**对象数组**：
+
+```json
+[
+  {
+    "sample_uuid": "",
+    "well_name": "YB_PrepBottle_15mL_Carrier_bottle_A1",
+    "liquids": [
+      { "name": "LiPF6", "volume": 0.6 },
+      { "name": "DMC", "volume": 1.2 }
+    ]
+  }
+]
+```
+
+#### 字段说明
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `sample_uuid` | string | 样品 UUID，无样品时传空字符串 `""` |
+| `well_name` | string | 目标物料容器的 **name**（从资源树中取物料节点的 `name` 字段，如瓶子、孔位名称） |
+| `liquids` | array | 要加入的液体列表 |
+| `liquids[].name` | string | 液体名称（如试剂名、溶剂名） |
+| `liquids[].volume` | number | 液体体积（单位由设备决定，通常为 mL） |
+
+#### 填写规则
+
+- `well_name` 必须是资源树中已存在的物料节点 `name`（不是 `id` 路径），通过 API #12 获取资源树后筛选
+- 每个数组元素代表一个目标容器的配方
+- 一个容器可以加入多种液体（`liquids` 数组多条记录）
+- 与 ResourceSlot 的区别：ResourceSlot 填 `{id, name, uuid}` 指向物料本身；FormulationSlot 用 `well_name` 引用物料，并附带液体配方信息
 
 ### 通过 API #12 获取资源树
 
