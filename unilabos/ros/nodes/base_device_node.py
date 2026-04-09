@@ -486,18 +486,12 @@ class BaseROS2DeviceNode(Node, Generic[T]):
                 if len(rts.root_nodes) == 1 and parent_resource is not None:
                     plr_instance = plr_instances[0]
                     if isinstance(plr_instance, Plate):
-                        empty_liquid_info_in: List[Tuple[Optional[str], float]] = [(None, 0)] * plr_instance.num_items
                         if len(ADD_LIQUID_TYPE) == 1 and len(LIQUID_VOLUME) == 1 and len(LIQUID_INPUT_SLOT) > 1:
                             ADD_LIQUID_TYPE = ADD_LIQUID_TYPE * len(LIQUID_INPUT_SLOT)
                             LIQUID_VOLUME = LIQUID_VOLUME * len(LIQUID_INPUT_SLOT)
                             self.lab_logger().warning(
                                 f"增加液体资源时，数量为1，自动补全为 {len(LIQUID_INPUT_SLOT)} 个"
                             )
-                        for liquid_type, liquid_volume, liquid_input_slot in zip(
-                            ADD_LIQUID_TYPE, LIQUID_VOLUME, LIQUID_INPUT_SLOT
-                        ):
-                            empty_liquid_info_in[liquid_input_slot] = (liquid_type, liquid_volume)
-                        plr_instance.set_well_liquids(empty_liquid_info_in)
                         try:
                             # noinspection PyProtectedMember
                             keys = list(plr_instance._ordering.keys())
@@ -511,6 +505,10 @@ class BaseROS2DeviceNode(Node, Generic[T]):
                             input_wells = []
                             for r in LIQUID_INPUT_SLOT:
                                 input_wells.append(plr_instance.children[r])
+                        for input_well, liquid_type, liquid_volume, liquid_input_slot in zip(
+                            input_wells, ADD_LIQUID_TYPE, LIQUID_VOLUME, LIQUID_INPUT_SLOT
+                        ):
+                            input_well.set_liquids([(liquid_type, liquid_volume, "uL")])
                         final_response["liquid_input_resource_tree"] = ResourceTreeSet.from_plr_resources(
                             input_wells
                         ).dump()
