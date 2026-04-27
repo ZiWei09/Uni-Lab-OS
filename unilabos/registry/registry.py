@@ -238,6 +238,7 @@ class Registry:
                             "class_name": "unilabos_class",
                         },
                         "always_free": True,
+                        "feedback_interval": 300.0,
                     },
                     "test_latency": test_latency_action,
                     "auto-test_resource": test_resource_action,
@@ -829,8 +830,9 @@ class Registry:
             raw_handles = (action_args or {}).get("handles")
             handles = normalize_ast_action_handles(raw_handles) if isinstance(raw_handles, list) else (raw_handles or {})
 
-            # placeholder_keys: 优先用装饰器显式配置，否则从参数类型检测
-            pk = (action_args or {}).get("placeholder_keys") or detect_placeholder_keys(params)
+            # placeholder_keys: 先从参数类型自动检测，再用装饰器显式配置覆盖/补充
+            pk = detect_placeholder_keys(params)
+            pk.update((action_args or {}).get("placeholder_keys") or {})
 
             # 从方法返回值类型生成 result schema
             result_schema = None
@@ -852,6 +854,8 @@ class Registry:
             }
             if (action_args or {}).get("always_free") or method_info.get("always_free"):
                 entry["always_free"] = True
+            _fb_iv = (action_args or {}).get("feedback_interval", method_info.get("feedback_interval", 1.0))
+            entry["feedback_interval"] = _fb_iv
             nt = normalize_enum_value((action_args or {}).get("node_type"), NodeType)
             if nt:
                 entry["node_type"] = nt
@@ -975,10 +979,12 @@ class Registry:
                 "schema": schema,
                 "goal_default": goal_default,
                 "handles": handles,
-                "placeholder_keys": action_args.get("placeholder_keys") or detect_placeholder_keys(method_params),
+                "placeholder_keys": {**detect_placeholder_keys(method_params), **(action_args.get("placeholder_keys") or {})},
             }
             if action_args.get("always_free") or method_info.get("always_free"):
                 action_entry["always_free"] = True
+            _fb_iv = action_args.get("feedback_interval", method_info.get("feedback_interval", 1.0))
+            action_entry["feedback_interval"] = _fb_iv
             nt = normalize_enum_value(action_args.get("node_type"), NodeType)
             if nt:
                 action_entry["node_type"] = nt

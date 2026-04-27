@@ -7,7 +7,7 @@
 
 选项:
   --auth <token>          Lab token（base64(ak:sk) 的结果，不含 "Lab " 前缀）
-  --base <url>            API 基础 URL（如 https://uni-lab.test.bohrium.com）
+  --base <url>            API 基础 URL（如 https://leap-lab.test.bohrium.com）
   --workflow-uuid <uuid>  目标 workflow 的 UUID
   --registry <path>       本地注册表文件路径（默认自动搜索）
   --rounds <n>            实验轮次数（默认 1）
@@ -17,7 +17,7 @@
 示例:
   python gen_notebook_params.py \\
     --auth YTFmZDlkNGUtxxxx \\
-    --base https://uni-lab.test.bohrium.com \\
+    --base https://leap-lab.test.bohrium.com \\
     --workflow-uuid abc-123-def \\
     --rounds 2
 """
@@ -265,6 +265,7 @@ def generate_template(nodes, registry_index, rounds):
 
     return {
         "lab_uuid": "$TODO_LAB_UUID",
+        "project_uuid": "$TODO_PROJECT_UUID",
         "workflow_uuid": "$TODO_WORKFLOW_UUID",
         "name": "$TODO_EXPERIMENT_NAME",
         "node_params": node_params,
