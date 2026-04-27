@@ -42,16 +42,3 @@ BIOYOND_PolymerStation_8StockCarrier:
   icon: ''
   init_param_schema: {}
   version: 1.0.0
-BIOYOND_PolymerStation_TipBox:
-  category:
-  - bottle_carriers
-  - tip_racks
-  class:
-    module: unilabos.resources.bioyond.bottle_carriers:BIOYOND_PolymerStation_TipBox
-    type: pylabrobot
-  description: BIOYOND_PolymerStation_TipBox (4x6布局，24个枪头孔位)
-  handles: []
-  icon: ''
-  init_param_schema: {}
-  registry_type: resource
-  version: 1.0.0
