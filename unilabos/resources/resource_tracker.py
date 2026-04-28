@@ -1335,6 +1335,16 @@ class DeviceNodeResourceTracker(object):
                 else:
                     res_list.extend(self.loop_find_resource(r, type(query_resource), "unilabos_uuid", res_uuid))
 
+            # 同一资源对象可能通过"直接注册"和"作为父资源子节点"被搜索到两次，按对象 id 去重
+            seen_ids: set = set()
+            deduped = []
+            for item in res_list:
+                oid = id(item[1])
+                if oid not in seen_ids:
+                    seen_ids.add(oid)
+                    deduped.append(item)
+            res_list = deduped
+
             if not try_mode:
                 assert len(res_list) > 0, f"没有找到资源 (uuid={res_uuid})，请检查资源是否存在"
                 assert len(res_list) == 1, f"通过uuid={res_uuid} 找到多个资源，请检查资源是否唯一: {res_list}"
@@ -1371,6 +1381,14 @@ class DeviceNodeResourceTracker(object):
                         r, resource_cls_type, identifier_key, getattr(query_resource, identifier_key)
                     )
                 )
+        seen_ids2: set = set()
+        deduped2 = []
+        for item in res_list:
+            oid = id(item[1])
+            if oid not in seen_ids2:
+                seen_ids2.add(oid)
+                deduped2.append(item)
+        res_list = deduped2
         if not try_mode:
             assert len(res_list) > 0, f"没有找到资源 {query_resource}，请检查资源是否存在"
             assert len(res_list) == 1, f"{query_resource} 找到多个资源，请检查资源是否唯一: {res_list}"
