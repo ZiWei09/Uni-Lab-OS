@@ -611,6 +611,10 @@ class ResourceTreeSet(object):
             }
             if has_model:
                 d["model"] = res.config.get("model", None)
+            # 防止 Deck 子类在 __init__ 中调用 setup() 预分配子资源，
+            # 与 PLR deserialize 从 children 列表再次分配同名资源产生命名冲突
+            if "setup" in d:
+                d["setup"] = False
             return d
 
         plr_resources = []
