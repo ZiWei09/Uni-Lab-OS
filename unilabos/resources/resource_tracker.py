@@ -606,7 +606,10 @@ class ResourceTreeSet(object):
                 },
                 "rotation": {"x": 0, "y": 0, "z": 0, "type": "Rotation"},
                 "category": res.config.get("category", plr_type),
-                "children": [node_to_plr_dict(child, has_model) for child in node.children],
+                # WareHouse 通过 sites 字符串追踪占位，不依赖 PLR children tree。
+                # 将 WareHouse 子节点排除在外，避免同名载架出现在多个 WareHouse 下时
+                # PLR _check_naming_conflicts 报命名冲突。
+                "children": [] if res.type == "warehouse" else [node_to_plr_dict(child, has_model) for child in node.children],
                 "parent_name": res.parent_instance_name,
             }
             if has_model:
