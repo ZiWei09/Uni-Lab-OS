@@ -179,6 +179,11 @@ class ItemizedCarrier(ResourcePLR):
           idx = i
           break
 
+    if idx is None:
+      # 反序列化时无法匹配 site（名称或坐标均不符），退回父类默认分配，不更新 site 跟踪
+      super().assign_child_resource(resource, location=location, reassign=reassign)
+      return
+
     if not reassign and self.sites[idx] is not None:
       raise ValueError(f"a site with index {idx} already exists")
     location = list(self.child_locations.values())[idx]
