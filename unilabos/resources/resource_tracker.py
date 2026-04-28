@@ -868,13 +868,34 @@ class ResourceTreeSet(object):
                                     f"已存在，跳过"
                                 )
 
+                        # 移除本地有但远端已不存在的物料（以远端为准）
+                        remote_material_names = {m.res_content.name for m in remote_child.children}
+                        removed_count = 0
+                        for child in list(local_sub_device.children):
+                            if child.res_content.name not in remote_material_names:
+                                local_sub_device.children.remove(child)
+                                removed_count += 1
+                                logger.info(
+                                    f"移除远端已不存在的物料: '{remote_root_id}/{remote_child_name}/{child.res_content.name}'"
+                                )
+
                         if added_count > 0:
                             logger.info(
                                 f"Device '{remote_root_id}/{remote_child_name}': "
                                 f"从远端同步了 {added_count} 个物料子树"
                             )
+                        if removed_count > 0:
+                            logger.info(
+                                f"Device '{remote_root_id}/{remote_child_name}': "
+                                f"移除了 {removed_count} 个远端已删除的物料"
+                            )
                     else:
                         # 二级物料已存在，比较三级子节点是否缺失
+                        if remote_child_name not in local_children_map:
+                            logger.warning(
+                                f"物料 '{remote_root_id}/{remote_child_name}' 在远端存在但本地不存在，跳过"
+                            )
+                            continue
                         local_material = local_children_map[remote_child_name]
                         local_material_children_map = {child.res_content.name: child for child in
                                                        local_material.children}
@@ -890,10 +911,27 @@ class ResourceTreeSet(object):
                                     f"物料 '{remote_root_id}/{remote_child_name}/{remote_sub_name}' "
                                     f"已存在，跳过"
                                 )
+
+                        # 移除本地有但远端已不存在的子物料（以远端为准）
+                        remote_sub_names = {s.res_content.name for s in remote_child.children}
+                        removed_count = 0
+                        for child in list(local_material.children):
+                            if child.res_content.name not in remote_sub_names:
+                                local_material.children.remove(child)
+                                removed_count += 1
+                                logger.info(
+                                    f"移除远端已不存在的子物料: '{remote_root_id}/{remote_child_name}/{child.res_content.name}'"
+                                )
+
                         if added_count > 0:
                             logger.info(
                                 f"物料 '{remote_root_id}/{remote_child_name}': "
                                 f"从远端同步了 {added_count} 个子物料"
+                            )
+                        if removed_count > 0:
+                            logger.info(
+                                f"物料 '{remote_root_id}/{remote_child_name}': "
+                                f"移除了 {removed_count} 个远端已删除的子物料"
                             )
             else:
                 # 情况1: 一级节点是物料（不是 device）
