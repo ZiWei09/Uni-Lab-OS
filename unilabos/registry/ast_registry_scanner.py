@@ -38,6 +38,8 @@ _DEVICE_ID_RE = re.compile(r"^[A-Za-z0-9_]+$")
 
 # 合法的装饰器来源模块
 _REGISTRY_DECORATOR_MODULE = "unilabos.registry.decorators"
+# @subscribe 订阅装饰器来源模块（区分于注册表，这是运行时，订阅回调不应被当作 action）
+_SUBSCRIBE_DECORATOR_MODULE = "unilabos.utils.decorator"
 
 
 def _validate_device_ids(device_ids: List[str]) -> None:
@@ -573,6 +575,12 @@ def _is_registry_decorator(name: str, import_map: Dict[str, str]) -> bool:
     return _REGISTRY_DECORATOR_MODULE in source
 
 
+def _is_subscribe_decorator(name: str, import_map: Dict[str, str]) -> bool:
+    """Check that *name* was imported from ``unilabos.utils.decorator`` (the @subscribe source)."""
+    source = import_map.get(name, "")
+    return _SUBSCRIBE_DECORATOR_MODULE in source
+
+
 def _extract_decorator_args(
     node: Union[ast.Call, ast.Name],
     import_map: Dict[str, str],
@@ -800,6 +808,10 @@ def _extract_class_body(
 
         # --- Skip private/dunder ---
         if method_name.startswith("_"):
+            continue
+
+        # --- Skip @subscribe 订阅回调（不是 action）---
+        if _has_decorator(item, "subscribe") and _is_subscribe_decorator("subscribe", import_map):
             continue
 
         # --- Check for @property or @topic_config → status property ---
