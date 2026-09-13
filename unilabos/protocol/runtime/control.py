@@ -13,7 +13,12 @@ from typing import Literal, Optional
 from pydantic import Field, JsonValue, model_validator
 
 from unilabos.protocol.base import JsonObject, NonEmptyStr, ServerObject
-from unilabos.server.database.tables.runtime import MaterialBinding, Transport
+from unilabos.server.database.tables.runtime import (
+    AttemptTrigger,
+    MaterialBinding,
+    Transport,
+    validate_attempt_link,
+)
 from unilabos.protocol.materials import InventoryRequirement
 from unilabos.protocol.runtime.data import (
     RUNTIME_PROTOCOL_VERSION,
@@ -25,6 +30,7 @@ CommandType = Literal[
     "cancel_job",
     "release_failed",
     "replace_result",
+    "resume_pending",
     "inventory_apply",
     "reconcile",
 ]
@@ -92,6 +98,11 @@ class ExecuteJobContent(ServerObject):
     attempt_group_uuid: NonEmptyStr
     retry_of_job_uuid: Optional[NonEmptyStr] = None
     attempt_no: int = Field(default=1, ge=1)
+    #: attempt 为何产生；attempt > 1 且无重试链只允许 ``loop_iteration``（循环体下一轮）。
+    attempt_trigger: AttemptTrigger = "initial"
+    #: 本节点已重试的次数（错误决策报告的 ``retry_count``）；循环下一轮不算重试，所以不能从
+    #: ``attempt_no`` 推。缺省由执行面按 ``attempt_no - 1`` 兜底。
+    retry_count: Optional[int] = Field(default=None, ge=0)
     device_uuid: NonEmptyStr
     action_name: NonEmptyStr
     action_type: str = ""
@@ -107,11 +118,16 @@ class ExecuteJobContent(ServerObject):
     inventory_requirements: list[InventoryRequirement] = Field(default_factory=list)
     inventory_reservation_uuid: Optional[NonEmptyStr] = None
     scheduler_revision: int = Field(ge=0)
+    #: 调度权威解析后的硬超时（秒）：注册表 ``@action(timeout)`` 或节点 ``execution_policy``；
+    #: 缺省由执行面按自己的注册表副本解析。
+    timeout_seconds: Optional[float] = Field(default=None, gt=0)
+    #: 调度权威解析后的业务软超时（秒）：节点 ``execution_policy.execution_timeout_seconds``
+    #: 优先，否则注册表 ``@action(execution_timeout)`` 表达式按最终 action_args 求值。
+    execution_timeout_seconds: Optional[float] = Field(default=None, gt=0)
 
     @model_validator(mode="after")
     def _validate_attempt_and_route(self) -> "ExecuteJobContent":
-        if (self.retry_of_job_uuid is None) != (self.attempt_no == 1):
-            raise ValueError("retry link and attempt number must agree")
+        validate_attempt_link(self.retry_of_job_uuid, self.attempt_no, self.attempt_trigger)
         route = (self.route_uuid, self.endpoint_uuid, self.transport)
         if any(value is None for value in route) and any(
             value is not None for value in route
@@ -121,7 +137,12 @@ class ExecuteJobContent(ServerObject):
 
 
 class ErrorDecisionContent(ServerObject):
-    """Backend 已完成前端询问和调度更新后的终态放行命令。"""
+    """Backend 已完成前端询问和调度更新后的终态放行命令。
+
+    ``release_failed`` / ``replace_result`` 放行一个失败 attempt；``resume_pending``
+    （``selected_action="wait"``）只用于 ``execution_timeout`` 软超时决策：动作仍在执行，
+    Edge 关闭终态闸门、attempt 回到 running 并重新计时。
+    """
 
     decision_uuid: NonEmptyStr
     confirmed_scheduler_revision: int = Field(ge=0)

@@ -24,6 +24,7 @@ from typing import (
 )
 
 from unilabos.backend.runtime.action import ActionContext
+from unilabos.backend.runtime.exception import TimeoutException
 from unilabos.backend.runtime.driver_creator import (
     is_workstation_driver,
     select_driver_creator,
@@ -258,6 +259,8 @@ class HostLinkDeviceNode(DeviceNode):
         )
         self.parent_device_id = str(parent_device_id or "")
         self.children: list[ResourceDictInstance] = []
+        # 图中本设备节点（含权威优先装配后的 sites）；post_init 可选入参从这里取
+        self.device_config: Optional[ResourceDictInstance] = None
         self.sub_devices: dict[str, HostLinkDeviceNode] = {}
         self.communication_node_id_to_instance: dict[
             str, HostLinkDeviceNode
@@ -595,8 +598,9 @@ class HostLinkDeviceNode(DeviceNode):
             raise RuntimeError(f"HostLink 设备 {self.device_id!r} 事件循环启动超时")
         self._started = True
         try:
-            if hasattr(self.driver, "post_init"):
-                self.driver.post_init(self)
+            post_init = getattr(self.driver, "post_init", None)
+            if callable(post_init):
+                post_init(self, **self.post_init_kwargs(post_init))
             self._setup_decorated_subscriptions()
             setup = getattr(self.driver, "setup", None)
             if callable(setup):
@@ -935,6 +939,16 @@ class HostLinkDeviceNode(DeviceNode):
             context.raise_if_cancelled()
             context.publish_feedback(await self._feedback_values(mapping))
 
+    @staticmethod
+    def _hard_timeout_seconds(mapping: Dict[str, Any]) -> Optional[float]:
+        """注册表 ``timeout`` 声明（秒）；无效值按未声明处理，由执行面看门狗兜底。"""
+
+        value = mapping.get("timeout") if isinstance(mapping, dict) else None
+        if value is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        seconds = float(value)
+        return seconds if seconds > 0 else None
+
     async def _execute_action(
         self,
         action: Callable[..., Any],
@@ -947,14 +961,29 @@ class HostLinkDeviceNode(DeviceNode):
             feedback_task = asyncio.create_task(
                 self._poll_action_feedback(context, mapping)
             )
+        hard_timeout = self._hard_timeout_seconds(mapping)
         try:
             context.raise_if_cancelled()
             if inspect.iscoroutinefunction(action):
-                result = await action(**kwargs)
+                pending: Any = action(**kwargs)
             else:
-                result = await asyncio.to_thread(action, **kwargs)
-                if inspect.isawaitable(result):
-                    result = await result
+                pending = asyncio.to_thread(action, **kwargs)
+            try:
+                if hard_timeout is not None:
+                    # @action(timeout=...) 硬超时：协程动作被真正取消；同步动作只能放弃等待，
+                    # 线程继续跑完但结果被丢弃。两种情况都以 TimeoutException 进入决策链。
+                    result = await asyncio.wait_for(pending, timeout=hard_timeout)
+                else:
+                    result = await pending
+            except asyncio.TimeoutError as exc:
+                context.request_cancel()
+                raise TimeoutException(
+                    getattr(action, "__name__", "action"),
+                    hard_timeout or 0.0,
+                    device_id=self.device_id,
+                ) from exc
+            if inspect.isawaitable(result):
+                result = await result
             context.raise_if_cancelled()
             return result
         except AttributeError as exc:
@@ -1256,6 +1285,7 @@ class HostLinkLocalRuntime:
         node.set_topic_bus(self.topic_bus)
         node.set_service_bus(self.service_bus)
         node.children = list(spec.device_config.children) if spec.device_config else []
+        node.device_config = spec.device_config
         node.__dict__["_hostlink_runtime"] = self
         # workstation 声明了 XDL protocol：挂载协议编排器（步骤生成与资源
         # 展开/回写逻辑与 ROS2 共用 runtime.workstation_protocol），

@@ -148,6 +148,7 @@ class CommandInboxRecord(TableObject, table=True):
         "cancel_job",
         "release_failed",
         "replace_result",
+        "resume_pending",
         "inventory_apply",
         "reconcile",
     ] = Field(sa_type=Text)
@@ -176,6 +177,7 @@ class CommandInboxRecord(TableObject, table=True):
             "cancel_job",
             "release_failed",
             "replace_result",
+            "resume_pending",
         }
         if requires_job != (self.job_uuid is not None):
             raise ValueError("command_type and job_uuid do not agree")
@@ -183,6 +185,21 @@ class CommandInboxRecord(TableObject, table=True):
         if terminal != (self.applied_at_ms is not None):
             raise ValueError("command status and applied_at_ms must agree")
         return self
+
+
+#: attempt 为何产生：首次派发 / 决策链 retry / 重启恢复 / 循环下一轮。
+AttemptTrigger = Literal["initial", "retry_decision", "recovery", "loop_iteration"]
+
+
+def validate_attempt_link(
+    retry_of_job_uuid: Optional[str], attempt_no: int, attempt_trigger: str
+) -> None:
+    """attempt 1 没有重试链；attempt > 1 要么是重试（带 ``retry_of_job_uuid``），要么是循环下一轮。"""
+
+    if retry_of_job_uuid is not None and attempt_no == 1:
+        raise ValueError("retry link and attempt number must agree")
+    if retry_of_job_uuid is None and attempt_no > 1 and attempt_trigger != "loop_iteration":
+        raise ValueError("retry link and attempt number must agree")
 
 
 class ExecutionJobRecord(TableObject, table=True):
@@ -194,6 +211,7 @@ class ExecutionJobRecord(TableObject, table=True):
     attempt_group_uuid: NonEmptyStr
     retry_of_job_uuid: Optional[NonEmptyStr] = None
     attempt_no: int = Field(default=1, ge=1)
+    attempt_trigger: AttemptTrigger = Field(default="initial", sa_type=Text)
     execute_command_uuid: NonEmptyStr
     device_uuid: NonEmptyStr
     action_name: NonEmptyStr
@@ -264,8 +282,7 @@ class ExecutionJobRecord(TableObject, table=True):
 
     @model_validator(mode="after")
     def _validate_job(self) -> "ExecutionJobRecord":
-        if (self.retry_of_job_uuid is None) != (self.attempt_no == 1):
-            raise ValueError("retry link and attempt number must agree")
+        validate_attempt_link(self.retry_of_job_uuid, self.attempt_no, self.attempt_trigger)
         route_values = (self.route_uuid, self.endpoint_uuid, self.transport)
         if any(value is None for value in route_values) and any(
             value is not None for value in route_values
@@ -303,7 +320,12 @@ class AdapterCommandOutboxRecord(TableObject, table=True):
     trigger_event_uuid: Optional[NonEmptyStr] = None
     target_adapter_epoch: Optional[NonEmptyStr] = None
     command_type: Literal[
-        "execute", "cancel", "release_failed", "replace_result", "reconcile_state"
+        "execute",
+        "cancel",
+        "release_failed",
+        "replace_result",
+        "resume_pending",
+        "reconcile_state",
     ] = Field(sa_type=Text)
     payload_uuid: Optional[NonEmptyStr] = None
     status: Literal["pending", "sent", "acknowledged", "failed"] = Field(
@@ -480,7 +502,7 @@ DATA_TABLES = (
             backend_sequence INTEGER NOT NULL CHECK (backend_sequence > 0),
             command_type TEXT NOT NULL CHECK (command_type IN (
                 'execute_job','cancel_job','release_failed','replace_result',
-                'inventory_apply','reconcile'
+                'resume_pending','inventory_apply','reconcile'
             )),
             job_uuid TEXT,
             payload_uuid TEXT,
@@ -500,7 +522,8 @@ DATA_TABLES = (
             version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
             CHECK (
                 (command_type IN (
-                    'execute_job','cancel_job','release_failed','replace_result'
+                    'execute_job','cancel_job','release_failed','replace_result',
+                    'resume_pending'
                 ) AND job_uuid IS NOT NULL)
                 OR command_type = 'inventory_apply'
                 OR (command_type = 'reconcile' AND job_uuid IS NULL)
@@ -536,6 +559,9 @@ DATA_TABLES = (
             attempt_group_uuid TEXT NOT NULL CHECK (TRIM(attempt_group_uuid) <> ''),
             retry_of_job_uuid TEXT,
             attempt_no INTEGER NOT NULL DEFAULT 1 CHECK (attempt_no > 0),
+            attempt_trigger TEXT NOT NULL DEFAULT 'initial' CHECK (
+                attempt_trigger IN ('initial','retry_decision','recovery','loop_iteration')
+            ),
             execute_command_uuid TEXT NOT NULL UNIQUE,
             device_uuid TEXT NOT NULL CHECK (TRIM(device_uuid) <> ''),
             action_name TEXT NOT NULL CHECK (TRIM(action_name) <> ''),
@@ -589,6 +615,7 @@ DATA_TABLES = (
             CHECK (
                 (retry_of_job_uuid IS NULL AND attempt_no = 1)
                 OR (retry_of_job_uuid IS NOT NULL AND attempt_no > 1)
+                OR (attempt_trigger = 'loop_iteration' AND retry_of_job_uuid IS NULL AND attempt_no > 1)
             ),
             CHECK (
                 (endpoint_uuid IS NULL AND transport IS NULL AND route_uuid IS NULL)
@@ -670,7 +697,8 @@ DATA_TABLES = (
             trigger_event_uuid TEXT,
             target_adapter_epoch TEXT,
             command_type TEXT NOT NULL CHECK (command_type IN (
-                'execute','cancel','release_failed','replace_result','reconcile_state'
+                'execute','cancel','release_failed','replace_result','resume_pending',
+                'reconcile_state'
             )),
             payload_uuid TEXT,
             status TEXT NOT NULL CHECK (

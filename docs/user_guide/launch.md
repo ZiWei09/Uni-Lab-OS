@@ -128,6 +128,17 @@ unilab --config path/to/your/config.py
 
 使用 `-g` 时，组态&拓扑图应包含实验室所有信息，详见{ref}`graph`。目前支持 GraphML 和 node-link JSON 两种格式。格式可参照 `tests/experiments` 下的启动文件。
 
+`-g <文件>.json` 是**创建入口，不是运行真相**。启动时文件先登记到 Graph Authority
+（materials.db 的图快照），随后一切从权威拉取——设备的位点、持有的物料都以权威为准：
+
+- 权威还没有这张图（按文件名）→ 整图创建，节点 / 位点在此获得权威 uuid；
+- 权威已有这张图 → 沿用权威快照，文件里权威没有的节点 / 连线补进去；文件对既有节点的
+  修改（位置、config、删除）**不生效**——改图请用前端画布或 `unilab graph upload`；
+- 文件里的 uuid 与权威身份不一致、payload 非法、Graph Authority 不可达 → 拒绝启动。
+
+`-g <图名|uuid>` 直接以权威中的图启动。物料同理：图中的物料按 uuid 对齐到物料权威
+（`materials.ensure`），权威已有的沿用、没有的创建、uuid 冲突拒绝。
+
 ### 2. 分别指定控制逻辑
 
 使用 `-c` 传入控制逻辑配置。
@@ -141,8 +152,8 @@ Uni-Lab 对外提供两个设备通信 backend。名称、能力和实现入口�
 
 | Backend | 设备运行时 | 支持的设备能力 | 应选择该 backend 的场景 |
 |---|---|---|---|
-| **hostlink** | 普通 Python 驱动通过 HostLink TCP 组网，不启动 rclpy/DDS | 设备发现、Action、Service、状态、JSON Topic、Workstation 及其 sub-device，以及经 Host 访问微后端物料服务 | 常规仪器控制、低中频状态和命令通信、不依赖 ROS2 图的工作站 |
-| **ros2**（默认） | 完整 ROS 2 分布式运行时 | HostLink 所覆盖的普通设备能力，以及原生 ROS graph、TF、MoveIt、RViz 和高频 ROS2 消息链路 | 运动规划、ROS 可视化、高频图像流或必须接入现有 ROS2 生态的设备 |
+| **hostlink**（默认） | 普通 Python 驱动通过 HostLink TCP 组网，不启动 rclpy/DDS | 设备发现、Action、Service、状态、JSON Topic、Workstation 及其 sub-device，以及经 Host 访问微后端物料服务 | 常规仪器控制、低中频状态和命令通信、不依赖 ROS2 图的工作站 |
+| **ros2** | 完整 ROS 2 分布式运行时 | HostLink 所覆盖的普通设备能力，以及原生 ROS graph、TF、MoveIt、RViz 和高频 ROS2 消息链路 | 运动规划、ROS 可视化、高频图像流或必须接入现有 ROS2 生态的设备 |
 
 `--backend` 只选择设备节点的初始化、执行和节点间通信方式，不选择微后端的
 WebSocket/HTTP 协议。Host 进程在两种 backend 下都可以提供微后端 HTTP API 和前端
@@ -163,7 +174,7 @@ unilab -g host.json --backend hostlink --hostlink-port 7302
 unilab -g slave.json --backend hostlink --is-slave \
   --host-node-ip 192.168.1.10 --hostlink-port 7302
 
-# 完整 ROS 2 运行时；不写 --backend 时也使用 ros2
+# 完整 ROS 2 运行时；不写 --backend 时使用 hostlink，需要 ROS 2 时必须显式指定
 unilab -g graph.json --backend ros2
 ```
 
