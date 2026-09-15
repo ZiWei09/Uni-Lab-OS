@@ -85,6 +85,12 @@ jobs:
       # tests/e2e/readme_demos.py 固定引用七个仓库的已验证提交（示例仓库 CI 反向
       # 固定 Uni-Lab-OS 提交，两侧互相锁定），用例按 pinned 提交克隆源码，再走
       # check_mode -> unilab graph create -> unilab -g 起微后端 -> 管理 API 跑工作流。
+      - name: Validate database and workflow contracts
+        run: |
+          call conda activate check-env
+          call install\unilabos_msgs\setup.bat
+          python -m pytest -q tests\server tests\protocol -p no:launch_testing -p no:launch_ros
+
       - name: Prepare demo evidence directory
         shell: pwsh
         run: |

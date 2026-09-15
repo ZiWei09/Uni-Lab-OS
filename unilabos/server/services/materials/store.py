@@ -15,6 +15,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Optional
 
+from unilabos.server.database.connection import SerializedConnection
 from unilabos.server.database.tables.materials import MATERIALS_DATABASE
 from unilabos.server.database.schema import initialize_database
 from unilabos.server.database.tables.materials import (
@@ -55,92 +56,10 @@ def _load_json(value: Any, fallback: Any) -> Any:
     return json.loads(str(value))
 
 
-class _MaterializedCursor:
-    """锁内取完结果集的游标快照；锁释放后按原游标接口消费。"""
-
-    def __init__(self, rows: list[sqlite3.Row], rowcount: int, lastrowid: Any):
-        self._rows = rows
-        self._index = 0
-        self.rowcount = rowcount
-        self.lastrowid = lastrowid
-
-    def fetchone(self) -> Optional[sqlite3.Row]:
-        if self._index >= len(self._rows):
-            return None
-        row = self._rows[self._index]
-        self._index += 1
-        return row
-
-    def fetchall(self) -> list[sqlite3.Row]:
-        rows = self._rows[self._index:]
-        self._index = len(self._rows)
-        return rows
-
-    def __iter__(self) -> Iterator[sqlite3.Row]:
-        while True:
-            row = self.fetchone()
-            if row is None:
-                return
-            yield row
-
-
-class _SerializedConnection:
-    """跨线程共享 SQLite 连接的串行化代理。
-
-    HostLink/HTTP 微后端的请求由多个线程分发，而同一个 sqlite3 连接的
-    语句执行与惰性取数并不线程安全（并发交错会读出错乱行）。这里让
-    每条语句在同一把可重入锁内执行；SELECT 结果当场物化，写事务由
-    ``MaterialsRepository.write()`` 以同一把锁覆盖 BEGIN..COMMIT 全程，
-    读操作因此也不会看到未提交的中间状态。
-    """
-
-    def __init__(self, connection: sqlite3.Connection, lock: threading.RLock):
-        self._connection = connection
-        self._lock = lock
-
-    def execute(self, sql: str, params: Any = ()) -> Any:
-        with self._lock:
-            cursor = self._connection.execute(sql, params)
-            if cursor.description is None:
-                # 写语句：rowcount/lastrowid 已定型，游标可安全带出锁外
-                return cursor
-            return _MaterializedCursor(
-                cursor.fetchall(), cursor.rowcount, cursor.lastrowid
-            )
-
-    def executemany(self, sql: str, params: Any) -> Any:
-        with self._lock:
-            return self._connection.executemany(sql, params)
-
-    def commit(self) -> None:
-        with self._lock:
-            self._connection.commit()
-
-    def rollback(self) -> None:
-        with self._lock:
-            self._connection.rollback()
-
-    def close(self) -> None:
-        with self._lock:
-            self._connection.close()
-
-    @property
-    def in_transaction(self) -> bool:
-        return self._connection.in_transaction
-
-    @property
-    def row_factory(self) -> Any:
-        return self._connection.row_factory
-
-    @row_factory.setter
-    def row_factory(self, value: Any) -> None:
-        self._connection.row_factory = value
-
-
 class MaterialsRepository:
     """materials.db 的表行 CRUD 基座（Service 直接继承本类持库）。
 
-    实例独占一个 SQLite connection；所有语句经 ``_SerializedConnection``
+    实例独占一个 SQLite connection；所有语句经 ``SerializedConnection``
     在同一把可重入锁内串行执行，写操作再通过 ``write()`` 的
     ``BEGIN IMMEDIATE`` 形成事务边界。``database`` 传入另一个
     ``MaterialsRepository``（或其子类实例）时借用宿主连接与锁——
@@ -156,12 +75,12 @@ class MaterialsRepository:
             return
         self._lock = threading.RLock()
         if isinstance(database, sqlite3.Connection):
-            self.connection = _SerializedConnection(database, self._lock)
+            self.connection = SerializedConnection(database, self._lock)
             self._owns_connection = False
             self.connection.row_factory = sqlite3.Row
             self.connection.execute("PRAGMA foreign_keys = ON")
         else:
-            self.connection = _SerializedConnection(
+            self.connection = SerializedConnection(
                 initialize_database(database, MATERIALS_DATABASE), self._lock
             )
             self._owns_connection = True
