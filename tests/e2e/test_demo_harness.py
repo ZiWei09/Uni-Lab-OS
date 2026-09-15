@@ -162,5 +162,7 @@ def test_site_projection_checks_uuid_and_occupant_without_rewriting_evidence(mon
     else:
         contracts.assert_batch([expectation], [proof])
         projected = smoke.assert_material_loop_workflow.call_args.args[0]
-        assert projected["jobs"][3]["return_info"]["return_value"]["to_site"] == "T3"
+        assert projected["jobs"][3]["return_info"]["return_value"]["to_site"] == "site-three"
+        assert projected["site_bindings"] == {"T3": "site-three"}
+        assert "site_bindings" not in proof
         assert value["to_site"] == "site-three"

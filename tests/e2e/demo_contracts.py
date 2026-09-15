@@ -92,7 +92,7 @@ class DemoContracts:
                 projected = proof
                 if index in {1, 3}:
                     # API 导入已经把 SiteSlot 绑定成 uuid，驱动会原样回报该 uuid。
-                    # 先按权威核对 UUID 和实际占位，再给旧 smoke 投影 label，不能只改预期放过错位。
+                    # 按权威核对 UUID 和实际占位，保留原始返回值并提供 label -> UUID 绑定。
                     deck = api_request(self.port, f"/materials/instances/{smoke.DECK_UUID}")
                     label = "T3" if index == 1 else "T4"
                     site = next(site for site in deck["sites"] if site["label"] == label)
@@ -100,7 +100,7 @@ class DemoContracts:
                     moved = projected["jobs"][3 if index == 1 else 2]["return_info"]["return_value"]
                     assert moved["to_site"] == site["site_uuid"], (moved, site)
                     assert moved["plate_uuid"] == site["occupied_material_uuid"], (moved, site)
-                    moved["to_site"] = label
+                    projected["site_bindings"] = {item["label"]: item["site_uuid"] for item in deck["sites"]}
                 functions[index](projected)
             elif package == "inventory_demo":
                 # 每步完成后、下一步提交前直查；不能用整个运行期间出现过的值充当这一刻的证据。
