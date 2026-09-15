@@ -10,11 +10,16 @@ export LINK=$CXX
 if [[ "$CONDA_BUILD_CROSS_COMPILATION" != "1" ]]; then
   PYTHON_EXECUTABLE=$PREFIX/bin/python
   PKG_CONFIG_EXECUTABLE=$BUILD_PREFIX/bin/pkg-config
-  OSX_DEPLOYMENT_TARGET="10.15"
 else
   PYTHON_EXECUTABLE=$BUILD_PREFIX/bin/python
   PKG_CONFIG_EXECUTABLE=$PREFIX/bin/pkg-config
-  OSX_DEPLOYMENT_TARGET="11.0"
+fi
+
+# macOS 最低版本由目标架构决定，不由是否交叉编译决定（原生 ARM 也至少是 11）。
+if [[ "$target_platform" == "osx-arm64" ]]; then
+  OSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-11.0}"
+else
+  OSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-10.15}"
 fi
 
 export ROS_PYTHON_VERSION=`$PYTHON_EXECUTABLE -c "import sys; print('%i.%i' % (sys.version_info[0:2]))"`
