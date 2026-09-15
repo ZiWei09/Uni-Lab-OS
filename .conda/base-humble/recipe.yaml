@@ -2,15 +2,15 @@
 
 package:
   name: unilabos
-  version: 0.12.1
+  version: 0.12.2
 
 source:
   path: ../../unilabos
   target_directory: unilabos
 
 build:
-  number: 1
-  string: humble_1
+  number: 0
+  string: humble_0
   python:
     entry_points:
     - unilab = unilabos.app.main:main
@@ -56,7 +56,7 @@ requirements:
   - pymodbus
   - matplotlib
   - pylibftdi
-  - unilabos-env ==0.12.1 humble_1
+  - unilabos-env ==0.12.2 humble_0
 
 about:
   repository: https://github.com/deepmodeling/Uni-Lab-OS

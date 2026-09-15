@@ -3,15 +3,15 @@
 
 package:
   name: unilabos
-  version: 0.12.1
+  version: 0.12.2
 
 source:
   path: ../../unilabos
   target_directory: unilabos
 
 build:
-  number: 1
-  string: jazzy_1
+  number: 0
+  string: jazzy_0
   python:
     entry_points:
     - unilab = unilabos.app.main:main
@@ -57,7 +57,7 @@ requirements:
   - pymodbus
   - matplotlib
   - pylibftdi
-  - unilabos-env ==0.12.1 jazzy_1
+  - unilabos-env ==0.12.2 jazzy_0
 
 about:
   repository: https://github.com/deepmodeling/Uni-Lab-OS
