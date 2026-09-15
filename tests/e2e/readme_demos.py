@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import json
 import os
+import random
+import re
 import signal
 import socket
 import subprocess
@@ -30,6 +32,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Optional
 
@@ -363,13 +366,46 @@ def resolve_demo_source(spec: DemoSpec, cache_root: Optional[Path] = None) -> tu
 # ---------------------------------------------------------------------------
 
 
+def _parse_windows_tcp_range(output: str) -> tuple[int, int]:
+    """netsh 标题随系统语言变化，只读取冒号后的起点与数量。"""
+    values = [int(value) for value in re.findall(r"[:：]\s*(\d+)", output)]
+    if len(values) != 2 or not (0 < values[0] <= 65535 and 0 < values[1] <= 65536 - values[0]):
+        raise RuntimeError(f"无法解析 Windows TCP 动态端口范围：{output!r}")
+    return values[0], values[0] + values[1]
+
+
+@lru_cache(maxsize=1)
+def _windows_tcp_range() -> tuple[int, int]:
+    result = subprocess.run(
+        ["netsh", "interface", "ipv4", "show", "dynamicport", "tcp"],
+        capture_output=True, check=True, text=True, errors="replace", timeout=10,
+    )
+    return _parse_windows_tcp_range(result.stdout)
+
+
 def free_port(*, exclude: tuple[int, ...] = ()) -> int:
-    while True:
+    # Windows bind(0) 会给出出站动态端口；子进程尚在初始化时，浏览器等可能抢先
+    # 使用该端口，令 HostLink 的独占绑定报 10013。测试端口选在实际动态范围外，
+    # 并使用与 HostLink 相同的独占规则探测；不修改系统端口配置或结束其他进程。
+    if os.name == "nt":
+        start, end = _windows_tcp_range()
+        candidates = [port for port in range(1024, 65536) if not start <= port < end and port not in exclude]
+        ports = random.SystemRandom().sample(candidates, min(128, len(candidates)))
+    else:
+        ports = [0] * 128
+    for candidate in ports:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
-            server.bind(("127.0.0.1", 0))
+            if os.name == "nt":
+                server.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            try:
+                server.bind(("0.0.0.0", candidate))
+                server.listen(1)
+            except OSError:
+                continue
             port = int(server.getsockname()[1])
-        if port not in exclude:
-            return port
+            if port not in exclude:
+                return port
+    raise RuntimeError("未找到可独占监听的测试端口（已避开系统动态端口范围）")
 
 
 def unilab_command(*args: str) -> list[str]:

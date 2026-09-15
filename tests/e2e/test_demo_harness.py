@@ -3,7 +3,7 @@
 import subprocess
 import sys
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock
 
 import pytest
 
@@ -11,6 +11,54 @@ from tests.e2e import readme_demos as harness
 from tests.e2e import test_readme_demos as runner
 from tests.e2e import demo_contracts
 from tests.e2e.demo_contracts import DemoContracts, demo_smoke
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("Start Port : 1024\nNumber of Ports : 13977", (1024, 15001)),
+    ("开始端口：49152\n端口数：16384", (49152, 65536)),
+])
+def test_parse_windows_dynamic_port_range(text, expected):
+    assert harness._parse_windows_tcp_range(text) == expected
+
+
+@pytest.mark.parametrize("text", ["unknown", "Start: 65000\nCount: 1000", "Start: 1\nCount: 0"])
+def test_invalid_windows_dynamic_port_range_is_not_silently_ignored(text):
+    with pytest.raises(RuntimeError, match="动态端口"):
+        harness._parse_windows_tcp_range(text)
+
+
+def test_windows_test_ports_avoid_dynamic_range_and_probe_exclusive_binding(monkeypatch):
+    monkeypatch.setattr(harness, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(harness, "_windows_tcp_range", lambda: (1024, 15001))
+
+    def sample(candidates, count):
+        assert count == 128
+        assert all(port >= 15001 for port in candidates)
+        assert 20002 not in candidates
+        return [20000, 20001]
+
+    monkeypatch.setattr(harness, "random", SimpleNamespace(
+        SystemRandom=lambda: SimpleNamespace(sample=sample)))
+    unavailable, available = MagicMock(), MagicMock()
+    for sock in (unavailable, available):
+        sock.__enter__.return_value = sock
+    unavailable.bind.side_effect = PermissionError("reserved port")
+    available.getsockname.return_value = ("0.0.0.0", 20001)
+    monkeypatch.setattr(harness, "socket", SimpleNamespace(
+        socket=Mock(side_effect=[unavailable, available]),
+        AF_INET=2, SOCK_STREAM=1, SOL_SOCKET=65535, SO_EXCLUSIVEADDRUSE=-5,
+    ))
+    assert harness.free_port(exclude=(20002,)) == 20001
+    available.setsockopt.assert_called_once_with(65535, -5, 1)
+    available.bind.assert_called_once_with(("0.0.0.0", 20001))
+    available.listen.assert_called_once_with(1)
+
+
+def test_no_ports_outside_dynamic_range_fails_without_retry_loop(monkeypatch):
+    monkeypatch.setattr(harness, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(harness, "_windows_tcp_range", lambda: (1024, 65536))
+    with pytest.raises(RuntimeError, match="测试端口"):
+        harness.free_port()
 
 
 def test_sources_default_to_pinned_not_neighbor_checkout(monkeypatch, tmp_path):
