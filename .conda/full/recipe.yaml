@@ -3,17 +3,17 @@
 
 package:
   name: unilabos-full
-  version: 0.12.1
+  version: 0.12.2
 
 build:
   noarch: generic
-  number: 1
-  string: jazzy_1
+  number: 0
+  string: jazzy_0
 
 requirements:
   run:
   # Base unilabos package (includes unilabos-env)
-  - unilabos ==0.12.1 jazzy_1
+  - unilabos ==0.12.2 jazzy_0
   # Documentation tools
   - sphinx
   - sphinx_rtd_theme

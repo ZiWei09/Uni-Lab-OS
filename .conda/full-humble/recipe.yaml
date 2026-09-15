@@ -2,16 +2,16 @@
 
 package:
   name: unilabos-full
-  version: 0.12.1
+  version: 0.12.2
 
 build:
   noarch: generic
-  number: 1
-  string: humble_1
+  number: 0
+  string: humble_0
 
 requirements:
   run:
-  - unilabos ==0.12.1 humble_1
+  - unilabos ==0.12.2 humble_0
   - sphinx
   - sphinx_rtd_theme
   - gradio

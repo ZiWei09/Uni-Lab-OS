@@ -3,12 +3,12 @@
 
 package:
   name: unilabos-env
-  version: 0.12.1
+  version: 0.12.2
 
 build:
   noarch: generic
-  number: 1
-  string: humble_1
+  number: 0
+  string: humble_0
 
 requirements:
   run:
@@ -33,7 +33,7 @@ requirements:
   - robostack-humble::ros-humble-tf2-ros-py
   - conda-forge::transforms3d
   - conda-forge::uv
-  - uni-lab::ros-humble-unilabos-msgs ==0.12.0
+  - uni-lab::ros-humble-unilabos-msgs ==0.12.1
 
 about:
   repository: https://github.com/deepmodeling/Uni-Lab-OS

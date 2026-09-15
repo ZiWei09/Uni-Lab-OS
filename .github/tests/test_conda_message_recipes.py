@@ -27,10 +27,14 @@ class MessageRecipeTests(unittest.TestCase):
             self.assertIn('OSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-11.0}"', script)
             self.assertNotIn('OSX_DEPLOYMENT_TARGET="10.15"', script)
 
-    def test_fixed_packages_have_a_new_build_number(self):
+    def test_fixed_packages_do_not_reuse_broken_release_coordinates(self):
         for name in ("msgs", "msgs-humble"):
             recipe = yaml.safe_load((ROOT / f"recipes/{name}/recipe.yaml").read_text(encoding="utf-8"))
-            self.assertEqual(recipe["build"]["number"], 2)
+            version = tuple(int(part) for part in recipe["package"]["version"].split("."))
+            # 0.12.0 的修复版从 build 2 开始；新版本可重新从 build 0 开始。
+            self.assertGreaterEqual(version, (0, 12, 0))
+            minimum_build = 2 if version == (0, 12, 0) else 0
+            self.assertGreaterEqual(recipe["build"]["number"], minimum_build)
 
 
 if __name__ == "__main__":
