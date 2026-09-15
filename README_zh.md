@@ -181,6 +181,9 @@ unilab package install \
 
 ## 参考驱动实现
 
+微后端设计理念、完整 HTTP API 目录、物料与工作流契约、实时通道及 Python/CLI/MCP 接入方式，
+见[完整接口手册](docs/developer_guide/interfaces/index.md)。
+
 我们提供了七个可直接运行的示例设备包，均作为独立 GitHub 仓库维护（由
 [LabDeviceTemplate](https://github.com/Xuwznln/LabDeviceTemplate) fork 生成）。克隆任一仓库，用
 `--devices <包目录> --external_devices_only` 加载，编写自己的驱动时可启动运行、对照学习：

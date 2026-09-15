@@ -1,5 +1,8 @@
 # 微后端 HTTP API
 
+完整的版本化接口、物料/工作流流程、SSE/WS/HostLink、Python/CLI/MCP 与 Jazzy 以来的迁移说明，
+请阅读 [接口手册](interfaces/index.md)。以下保留简要概览；具体响应与例外以手册和对应源码为准。
+
 Uni-Lab-OS 的 `8002` 端口提供微后端 API 和入口导航页。用户界面由独立前端
 项目提供，可部署到 GitHub Pages，并通过 HTTP 和 SSE 读取本机微后端。
 
@@ -29,13 +32,16 @@ Uni-Lab-OS 的 `8002` 端口提供微后端 API 和入口导航页。用户界�
 当物料权威配置为外部微后端时，本进程不会挂载本地 `/materials/*` writer，避免
 出现两个可写物料中心。
 
-`/materials/*` 的写请求都是 `materials.v1` 信封 `InventoryMutation`（`command_uuid` +
+`/materials/*` 的核心幂等业务写请求使用 `materials.v1` 信封 `InventoryMutation`（`command_uuid` +
 `effect_key` 幂等，`operation` 与路由一一对应，`actor_type` 落账本；浏览器 / 操作员发起的
 写请求应填 `human`）。信封的 `payload` 会与该路由的类型化请求体**逐字段比对**，缺省字段也要
 写全（例如 `lots/inbound` 的 `expiry_at_ms: null`），否则返回 422
 `mutation.payload differs from the typed request body`。库存分两种账目：`instantiate` 按件登记
 实例（有 uuid、可放位点，工作流 `kind: "material"` 需求选取），`lots/inbound` 按量登记批次
 （只记数量 / 单位 / 有效期，工作流 `kind: "lot"` 需求预留与扣减）。
+
+例外包括 links、notify-device、changes/ack，以及只读的 snapshots/compare；它们直接接收各自模型，
+不能统一套 Mutation。详见 [物料接口](interfaces/materials.md)。
 
 前端不应直接向 Host 创建或重试 Job。执行命令由调度后端下发；Host 报错后，后端
 负责询问前端、更新调度图或 attempt，再释放最终结果。

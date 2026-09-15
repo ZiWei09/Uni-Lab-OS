@@ -187,6 +187,10 @@ unilab package install \
 
 See [Best Practice Guide](https://deepmodeling.github.io/Uni-Lab-OS/user_guide/best_practice.html)
 
+For the current microbackend architecture, HTTP API catalog, workflow and material contracts,
+real-time channels, Python/CLI and MCP integration, see the
+[Complete Interface Guide](docs/developer_guide/interfaces/index.md).
+
 ## Reference Driver Implementations
 
 Seven runnable example device packages are maintained as standalone GitHub repositories (generated
