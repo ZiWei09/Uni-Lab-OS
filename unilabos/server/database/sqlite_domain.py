@@ -15,9 +15,10 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Union
 
+from unilabos.server.database.connection import SerializedConnection
 from unilabos.server.database.schema import DatabaseSpec, initialize_database
 
-DomainDatabase = Union[str, Path, sqlite3.Connection, "SqliteDomain"]
+DomainDatabase = Union[str, Path, sqlite3.Connection, SerializedConnection, "SqliteDomain"]
 
 
 class SqliteDomain:
@@ -35,20 +36,26 @@ class SqliteDomain:
             self.connection = database.connection
             self._write_lock = database._write_lock
             self._owns_connection = False
-        elif isinstance(database, sqlite3.Connection):
+        elif isinstance(database, SerializedConnection):
             self.connection = database
+            self._write_lock = database.write_lock
+            self._owns_connection = False
+        elif isinstance(database, sqlite3.Connection):
+            self._write_lock = threading.RLock()
+            self.connection = SerializedConnection(database, self._write_lock)
             self.connection.row_factory = sqlite3.Row
             self.connection.execute("PRAGMA foreign_keys = ON")
-            self._write_lock = threading.RLock()
             self._owns_connection = False
         else:
-            self.connection = initialize_database(database, spec)
             self._write_lock = threading.RLock()
+            self.connection = SerializedConnection(
+                initialize_database(database, spec), self._write_lock
+            )
             self._owns_connection = True
 
     @property
     def write_lock(self) -> threading.RLock:
-        """本库进程内唯一写锁；同库共存域共享同一实例。"""
+        """本库进程内读写共用锁；同库共存域共享同一实例。"""
 
         return self._write_lock
 
@@ -63,7 +70,7 @@ class SqliteDomain:
         self.close()
 
     @contextmanager
-    def write(self) -> Iterator[sqlite3.Connection]:
+    def write(self) -> Iterator[SerializedConnection]:
         """本库唯一的进程内 writer 事务入口（BEGIN IMMEDIATE）。"""
 
         with self._write_lock:

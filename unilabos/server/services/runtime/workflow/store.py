@@ -23,6 +23,7 @@ from unilabos.server.services.runtime.workflow.errors import (
     StoreNotFound,
     StoreRevisionConflict,
 )
+from unilabos.server.database.connection import SerializedConnection
 from unilabos.server.database.schema import initialize_database
 from unilabos.server.database.sqlite_domain import SqliteDomain
 from unilabos.server.database.tables.runtime import RUNTIME_DATABASE
@@ -71,7 +72,7 @@ class WorkflowStore:
 
     def __init__(
         self,
-        database: "str | Path | sqlite3.Connection | SqliteDomain | WorkflowStore",
+        database: "str | Path | sqlite3.Connection | SerializedConnection | SqliteDomain | WorkflowStore",
         *,
         lock: Optional[threading.RLock] = None,
     ):
@@ -80,8 +81,12 @@ class WorkflowStore:
             if lock is None:
                 lock = database.write_lock
             database = database.connection
+        if isinstance(database, SerializedConnection):
+            if lock is not None and lock is not database.write_lock:
+                raise ValueError("共享 SQLite 连接必须使用同一把读写锁")
+            lock = database.write_lock
         self._lock = lock if lock is not None else threading.RLock()
-        if isinstance(database, sqlite3.Connection):
+        if isinstance(database, (sqlite3.Connection, SerializedConnection)):
             self.path = ""
             self._conn = database
             self._owns_connection = False
@@ -102,9 +107,11 @@ class WorkflowStore:
             self._conn.execute(
                 f"PRAGMA busy_timeout = {_STORE_SQLITE_BUSY_TIMEOUT_MS}"
             )
+        if not isinstance(self._conn, SerializedConnection):
+            self._conn = SerializedConnection(self._conn, self._lock)
 
     @property
-    def connection(self) -> sqlite3.Connection:
+    def connection(self) -> SerializedConnection:
         """底层 SQLite 连接（与其他域 Service 的属性面一致）。"""
 
         return self._conn

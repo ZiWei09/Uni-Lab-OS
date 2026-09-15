@@ -17,6 +17,7 @@ intro.md
 :maxdepth: 2
 
 developer_guide/http_api.md
+developer_guide/interfaces/index.md
 developer_guide/mcp.md
 developer_guide/mcp_guide.md
 developer_guide/mcp_demo_validation_20260913.md
