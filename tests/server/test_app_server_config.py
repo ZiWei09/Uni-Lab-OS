@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
+from types import SimpleNamespace
 
 import pytest
 import uvicorn
@@ -117,8 +119,12 @@ def test_client_disconnect_during_body_read_is_not_an_asgi_error() -> None:
     assert sent[0]["status"] == 499
 
 
-def test_start_server_bounds_graceful_shutdown(monkeypatch) -> None:
+@pytest.mark.parametrize("platform", ["win32", "linux"])
+def test_start_server_bounds_graceful_shutdown(monkeypatch, platform) -> None:
+    if platform == "win32" and sys.platform != "win32":
+        pytest.skip("Windows IOCP 专用入口")
     captured: dict = {}
+    policy = asyncio.get_event_loop_policy()
 
     class FakeConfig:
         def __init__(self, **kwargs):
@@ -130,16 +136,32 @@ def test_start_server_bounds_graceful_shutdown(monkeypatch) -> None:
             self.should_exit = False
 
         def run(self):
-            captured["ran"] = True
+            captured["entrypoint"] = "run"
+
+        async def serve(self):
+            captured["entrypoint"] = "serve"
+            captured["loop"] = asyncio.get_running_loop()
+            captured["proactor"] = captured["loop"]._proactor
 
     monkeypatch.setattr(uvicorn, "Config", FakeConfig)
     monkeypatch.setattr(uvicorn, "Server", FakeServer)
+    monkeypatch.setattr(app_module, "sys", SimpleNamespace(platform=platform))
+    monkeypatch.setattr(app_module, "ensure_port_available", lambda *_: None)
     monkeypatch.setattr(app_module, "setup_server", lambda: app_module.app)
     monkeypatch.setattr(app_module, "setup_fastapi_logging", lambda: None)
 
     app_module.start_server(host="127.0.0.1", port=18999, open_browser=False)
 
-    assert captured["ran"] is True
+    if platform == "win32":
+        from unilabos.server.windows_event_loop import _AcceptRetryProactor
+
+        assert captured["entrypoint"] == "serve"
+        assert isinstance(captured["proactor"], _AcceptRetryProactor)
+        assert captured["loop"].is_closed()
+    else:
+        assert captured["entrypoint"] == "run"
+        assert "loop" not in captured
+    assert asyncio.get_event_loop_policy() is policy
     assert captured["timeout_graceful_shutdown"] == app_module.GRACEFUL_SHUTDOWN_TIMEOUT_S
     assert 0 < app_module.GRACEFUL_SHUTDOWN_TIMEOUT_S <= 30
     assert app_module.request_server_shutdown() is False  # run 返回后已清空引用

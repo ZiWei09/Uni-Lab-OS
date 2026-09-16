@@ -1,8 +1,10 @@
 """微后端 HTTP Application 与 Uvicorn 生命周期。"""
 
+import asyncio
 import errno
 import json
 import socket
+import sys
 import threading
 import webbrowser
 
@@ -622,7 +624,14 @@ def start_server(host: str = "0.0.0.0", port: int = 8002, open_browser: bool = T
     if _abort_serving.is_set():
         server.should_exit = True
     try:
-        server.run()
+        if sys.platform == "win32":
+            from unilabos.server.windows_event_loop import create_event_loop
+
+            # 显式传给 Runner，不设置全局策略；也不依赖不同 Uvicorn 版本的 loop 配置格式。
+            with asyncio.Runner(loop_factory=create_event_loop) as runner:
+                runner.run(server.serve())
+        else:
+            server.run()
     except SystemExit:
         # uvicorn 绑定失败时自行 sys.exit(1)；预检和真正绑定之间端口仍可能被抢占，
         # 再探测一次即可区分「端口被占」与其他启动失败。
