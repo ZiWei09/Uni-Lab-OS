@@ -2058,6 +2058,9 @@ class Registry:
                         }
                         if v.get("always_free"):
                             entry["always_free"] = True
+                        # 保留 YAML 中手写的动作显示名（前端展示用）
+                        if old_cfg.get("display_name"):
+                            entry["display_name"] = old_cfg["display_name"]
                         old_node_type = old_cfg.get("node_type")
                         if old_node_type in [
                             NodeType.ILAB.value,

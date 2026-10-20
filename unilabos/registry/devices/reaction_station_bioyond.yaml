@@ -5,6 +5,7 @@ reaction_station.bioyond:
   class:
     action_value_mappings:
       add_time_constraint:
+        display_name: 添加时间约束
         feedback: {}
         goal:
           duration: duration
@@ -56,6 +57,7 @@ reaction_station.bioyond:
           type: object
         type: UniLabJsonCommand
       auto-skip_titration_steps:
+        display_name: 跳过滴定步骤
         feedback: {}
         goal: {}
         goal_default:
@@ -83,6 +85,7 @@ reaction_station.bioyond:
           type: object
         type: UniLabJsonCommand
       auto-wait_for_multiple_orders_and_get_reports:
+        display_name: 等待任务完成并获取报告
         feedback: {}
         goal: {}
         goal_default:
@@ -116,6 +119,7 @@ reaction_station.bioyond:
           type: object
         type: UniLabJsonCommand
       drip_back:
+        display_name: 滴回去
         feedback: {}
         goal:
           assign_material_name: assign_material_name
@@ -185,6 +189,7 @@ reaction_station.bioyond:
           type: object
         type: UniLabJsonCommand
       extract_actuals_from_batch_reports:
+        display_name: 提取实际加料量
         feedback: {}
         goal:
           batch_reports_result: batch_reports_result
@@ -228,6 +233,7 @@ reaction_station.bioyond:
           type: object
         type: UniLabJsonCommand
       liquid_feeding_beaker:
+        display_name: 液体进料烧杯
         feedback: {}
         goal:
           assign_material_name: assign_material_name
@@ -297,6 +303,7 @@ reaction_station.bioyond:
           type: object
         type: UniLabJsonCommand
       liquid_feeding_solvents:
+        display_name: 液体进料-溶剂
         feedback: {}
         goal:
           assign_material_name: assign_material_name
@@ -380,6 +387,7 @@ reaction_station.bioyond:
           type: object
         type: UniLabJsonCommand
       liquid_feeding_titration:
+        display_name: 液体进料(滴定)
         feedback: {}
         goal:
           assign_material_name: assign_material_name
@@ -479,6 +487,7 @@ reaction_station.bioyond:
           type: object
         type: UniLabJsonCommand
       liquid_feeding_vials_non_titration:
+        display_name: 液体进料小瓶(非滴定)
         feedback: {}
         goal:
           assign_material_name: assign_material_name
@@ -548,6 +557,7 @@ reaction_station.bioyond:
           type: object
         type: UniLabJsonCommand
       process_and_execute_workflow:
+        display_name: 合并并执行工作流
         feedback: {}
         goal:
           task_name: task_name
@@ -582,6 +592,7 @@ reaction_station.bioyond:
           type: object
         type: UniLabJsonCommand
       reactor_taken_in:
+        display_name: 反应器放入
         feedback: {}
         goal:
           assign_material_name: assign_material_name
@@ -624,6 +635,7 @@ reaction_station.bioyond:
           type: object
         type: UniLabJsonCommand
       reactor_taken_out:
+        display_name: 反应器取出
         feedback: {}
         goal: {}
         goal_default: {}
@@ -645,6 +657,7 @@ reaction_station.bioyond:
           type: object
         type: UniLabJsonCommand
       scheduler_start:
+        display_name: 启动调度器
         feedback: {}
         goal: {}
         goal_default: {}
@@ -668,6 +681,7 @@ reaction_station.bioyond:
           type: object
         type: UniLabJsonCommand
       solid_feeding_vials:
+        display_name: 固体进料小瓶
         feedback: {}
         goal:
           assign_material_name: assign_material_name
