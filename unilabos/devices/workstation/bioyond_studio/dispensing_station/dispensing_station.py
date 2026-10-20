@@ -9,6 +9,7 @@ import pint
 
 from unilabos.devices.workstation.bioyond_studio.bioyond_rpc import BioyondException
 from unilabos.devices.workstation.bioyond_studio.station import BioyondWorkstation
+from unilabos.registry.decorators import not_action
 from unilabos.ros.nodes.base_device_node import ROS2DeviceNode, BaseROS2DeviceNode
 import json
 import sys
@@ -224,6 +225,16 @@ class BioyondDispensingStation(BioyondWorkstation):
         m_tot: str = "70",
         titration_percent: str = "0.03",
     ) -> ComputeExperimentDesignReturn:
+        """计算实验设计
+
+        根据组分摩尔比、目标固含量和总质量，输出 solutions / titration / solvents / feeding_order 供后续节点使用。
+
+        Args:
+            ratio[组分摩尔比]: 组分摩尔比的对象，保持输入顺序，如{"MDA":1,"BTDA":1}
+            wt_percent[目标固含量]: 目标固含质量分数，如 0.25
+            m_tot[总质量(g)]: 反应混合物总质量(g)
+            titration_percent[滴定比例]: 滴定比例(10%部分)，如 0.03
+        """
         try:
             if isinstance(ratio, str):
                 try:
@@ -957,30 +968,23 @@ class BioyondDispensingStation(BioyondWorkstation):
                                            speed: str = None,
                                            temperature: str = None,
                                            delay_time: str = None) -> str:
-        """
-        批量创建二胺溶液配置任务
+        """批量创建二胺溶液配置任务
 
-        参数说明:
-        - solutions: 溶液列表（数组）或JSON字符串，格式如下:
-          [
-              {
-                  "name": "MDA",
-                  "order": 0,
-                  "solid_mass": 5.0,
-                  "solvent_volume": 20,
-                  ...
-              },
-              ...
-          ]
-        - liquid_material_name: 液体物料名称，默认为"NMP"
-        - speed: 搅拌速度，如果为None则使用默认值400
-        - temperature: 温度，如果为None则使用默认值20
-        - delay_time: 延迟时间，如果为None则使用默认值600
+        Args:
+            solutions[溶液列表]: 溶液列表，JSON数组格式，每个元素包含 name(物料名称)、order(序号)、solid_mass(固体质量g)、solvent_volume(溶剂体积mL)，通常由 compute_experiment_design 连线传入
+            liquid_material_name[溶剂名称]: 液体溶剂名称，用于溶解固体物料，默认为NMP（N-甲基吡咯烷酮）
+            speed[搅拌速度(rpm)]: 搅拌速度（rpm），用于混合溶液，不填则默认400转/分钟
+            temperature[搅拌温度(℃)]: 搅拌温度（℃），不填则默认20℃（室温）
+            delay_time[搅拌时间(s)]: 搅拌时间（s），默认600s
 
-        返回: JSON字符串格式的任务创建结果
+        solutions 格式示例:
+          [{"name": "MDA", "order": 0, "solid_mass": 5.0, "solvent_volume": 20}]
 
-        异常:
-        - BioyondException: 各种错误情况下的统一异常
+        Returns:
+            JSON字符串格式的任务创建结果
+
+        Raises:
+            BioyondException: 各种错误情况下的统一异常
         """
         try:
             # 参数类型转换：如果是字符串则解析为列表
@@ -1117,6 +1121,7 @@ class BioyondDispensingStation(BioyondWorkstation):
             self.hardware_interface._logger.error(error_msg)
             raise BioyondException(error_msg)
 
+    @not_action
     def brief_step_parameters(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """获取简要步骤参数（站点项目接口）
 
@@ -1128,6 +1133,7 @@ class BioyondDispensingStation(BioyondWorkstation):
         """
         return self._post_project_api("/api/lims/order/brief-step-paramerers", data)
 
+    @not_action
     def project_order_report(self, order_id: str) -> Dict[str, Any]:
         """查询项目端订单报告（兼容旧路径）
 
@@ -1139,6 +1145,7 @@ class BioyondDispensingStation(BioyondWorkstation):
         """
         return self._post_project_api("/api/lims/order/project-order-report", order_id)
 
+    @not_action
     def workflow_sample_locations(self, workflow_id: str) -> Dict[str, Any]:
         """查询工作流样品库位（站点项目接口）
 
@@ -1159,27 +1166,24 @@ class BioyondDispensingStation(BioyondWorkstation):
                                               temperature: str = None,
                                               delay_time: str = None,
                                               liquid_material_name: str = "NMP") -> str:
-        """
-        批量创建90%10%小瓶投料任务（仅创建1个任务，但包含所有90%和10%物料）
+        """批量创建90%10%小瓶投料任务（仅创建1个任务，但包含所有90%和10%物料）
 
-        参数说明:
-        - titration: 滴定信息的字典或JSON字符串，格式如下:
-          {
-              "name": "BTDA",
-              "main_portion": 1.9152351915461294,  # 主称固体质量(g) -> 90%物料
-              "titration_portion": 0.05923407808905555,  # 滴定固体质量(g) -> 10%物料固体
-              "titration_solvent": 3.050555021586361  # 滴定溶液体积(mL) -> 10%物料液体
-          }
-        - hold_m_name: 库位名称，如"C01"。必填参数
-        - speed: 搅拌速度，如果为None则使用默认值400
-        - temperature: 温度，如果为None则使用默认值40
-        - delay_time: 延迟时间，如果为None则使用默认值600
-        - liquid_material_name: 10%物料的液体物料名称，默认为"NMP"
+        Args:
+            titration[滴定信息]: 滴定信息对象，包含 name(物料名称)、main_portion(主称固体质量g)、titration_portion(滴定固体质量g)、titration_solvent(滴定溶液体积mL)，通常由 compute_experiment_design 连线传入
+            hold_m_name[6孔板库位名称]: 6孔板库位名称，如"C01"，必填
+            speed[搅拌速度(rpm)]: 搅拌速度（rpm），不填则默认400
+            temperature[搅拌温度(℃)]: 搅拌温度（℃），不填则默认40
+            delay_time[搅拌时间(s)]: 搅拌时间（s），默认600s
+            liquid_material_name[10%部分溶剂名称]: 10%物料的液体物料名称，默认为"NMP"
 
-        返回: JSON字符串格式的任务创建结果
+        titration 格式示例:
+          {"name": "BTDA", "main_portion": 1.915, "titration_portion": 0.059, "titration_solvent": 3.05}
 
-        异常:
-        - BioyondException: 各种错误情况下的统一异常
+        Returns:
+            JSON字符串格式的任务创建结果
+
+        Raises:
+            BioyondException: 各种错误情况下的统一异常
         """
         try:
             # 参数类型转换：如果是字符串则解析为字典
@@ -1419,34 +1423,18 @@ class BioyondDispensingStation(BioyondWorkstation):
                                                   batch_create_result: str = None,
                                                   timeout: int = 7200,
                                                   check_interval: int = 10) -> Dict[str, Any]:
-        """
-        同时等待多个任务完成并获取实验报告
+        """同时等待多个任务完成并获取实验报告
 
-        参数说明:
-        - batch_create_result: 批量创建任务的返回结果JSON字符串，包含order_codes和order_ids数组
-        - timeout: 超时时间（秒），默认7200秒（2小时）
-        - check_interval: 检查间隔（秒），默认10秒
+        Args:
+            batch_create_result[批量任务结果]: 批量创建任务的返回结果对象，包含order_codes和order_ids数组。从上游batch_create节点通过handle传递
+            timeout[超时时间(秒)]: 等待超时时间（秒），默认7200秒（2小时）。超过此时间未完成的任务将标记为timeout
+            check_interval[检查间隔(秒)]: 检查任务状态的时间间隔（秒），默认每10秒检查一次所有待完成任务
 
-        返回: 包含所有任务状态和报告的字典
-        {
-            "total": 2,
-            "completed": 2,
-            "timeout": 0,
-            "elapsed_time": 120.5,
-            "reports": [
-                {
-                    "order_code": "task_vial_1",
-                    "order_id": "uuid1",
-                    "status": "completed",
-                    "completion_status": 30,
-                    "report": {...}
-                },
-                ...
-            ]
-        }
+        Returns:
+            包含所有任务状态和报告的字典，字段有 total、completed、timeout、elapsed_time、reports
 
-        异常:
-        - BioyondException: 所有任务都超时或发生错误
+        Raises:
+            BioyondException: 所有任务都超时或发生错误
         """
         try:
             # 参数类型转换
@@ -1667,6 +1655,7 @@ class BioyondDispensingStation(BioyondWorkstation):
             self.hardware_interface._logger.error(error_msg)
             raise BioyondException(error_msg)
 
+    @not_action
     def process_order_finish_report(self, report_request, used_materials) -> Dict[str, Any]:
         """
         重写父类方法，处理任务完成报送并记录到 order_completion_status
@@ -1710,27 +1699,16 @@ class BioyondDispensingStation(BioyondWorkstation):
         target_device_id: str,
         transfer_groups: list
     ) -> dict:
-        """
-        将配液站完成的物料转移到指定反应站的堆栈库位
-        支持多组转移任务,每组包含物料名称、目标堆栈和目标库位
+        """将配液站完成的物料转移到指定反应站的堆栈库位
+
+        支持多组转移任务，每组包含物料名称、目标堆栈和目标库位。
 
         Args:
-            target_device_id: 目标反应站设备ID(所有转移组使用同一个设备)
-            transfer_groups: 转移任务组列表,每组包含:
-                - materials: 物料名称(字符串,将通过RPC查询)
-                - target_stack: 目标堆栈名称(如"堆栈1左")
-                - target_sites: 目标库位(如"A01")
+            target_device_id[目标反应站]: 目标反应站设备ID(所有转移组使用同一个设备)
+            transfer_groups[转移任务组]: 转移任务组列表，每组包含 materials(物料名称)、target_stack(目标堆栈，如"堆栈1左")、target_sites(目标库位，如"A01")
 
         Returns:
-            dict: 转移结果
-                {
-                    "success": bool,
-                    "total_groups": int,
-                    "successful_groups": int,
-                    "failed_groups": int,
-                    "target_device_id": str,
-                    "details": [...]
-                }
+            dict: 转移结果，字段有 success、total_groups、successful_groups、failed_groups、target_device_id、details
         """
         try:
             # 验证参数
@@ -1906,6 +1884,7 @@ class BioyondDispensingStation(BioyondWorkstation):
                 "error": error_msg
             }
 
+    @not_action
     def query_resource_by_name(self, material_name: str):
         """
         通过物料名称查询资源对象(适用于Bioyond系统)

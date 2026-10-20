@@ -5,143 +5,8 @@ bioyond_dispensing_station:
   - bioyond_dispensing_station
   class:
     action_value_mappings:
-      auto-brief_step_parameters:
-        feedback: {}
-        goal: {}
-        goal_default:
-          data: null
-        handles: {}
-        placeholder_keys: {}
-        result: {}
-        schema:
-          description: ''
-          properties:
-            feedback: {}
-            goal:
-              properties:
-                data:
-                  type: object
-              required:
-              - data
-              type: object
-            result:
-              type: object
-          required:
-          - goal
-          title: brief_step_parameters参数
-          type: object
-        type: UniLabJsonCommand
-      auto-process_order_finish_report:
-        feedback: {}
-        goal: {}
-        goal_default:
-          report_request: null
-          used_materials: null
-        handles: {}
-        placeholder_keys: {}
-        result: {}
-        schema:
-          description: ''
-          properties:
-            feedback: {}
-            goal:
-              properties:
-                report_request:
-                  description: WorkstationReportRequest 对象，包含任务完成信息
-                  type: string
-                used_materials:
-                  description: 物料使用记录列表
-                  type: string
-              required:
-              - report_request
-              - used_materials
-              type: object
-            result:
-              type: object
-          required:
-          - goal
-          title: process_order_finish_report参数
-          type: object
-        type: UniLabJsonCommand
-      auto-project_order_report:
-        feedback: {}
-        goal: {}
-        goal_default:
-          order_id: null
-        handles: {}
-        placeholder_keys: {}
-        result: {}
-        schema:
-          description: ''
-          properties:
-            feedback: {}
-            goal:
-              properties:
-                order_id:
-                  type: string
-              required:
-              - order_id
-              type: object
-            result:
-              type: object
-          required:
-          - goal
-          title: project_order_report参数
-          type: object
-        type: UniLabJsonCommand
-      auto-query_resource_by_name:
-        feedback: {}
-        goal: {}
-        goal_default:
-          material_name: null
-        handles: {}
-        placeholder_keys: {}
-        result: {}
-        schema:
-          description: ''
-          properties:
-            feedback: {}
-            goal:
-              properties:
-                material_name:
-                  description: 物料名称
-                  type: string
-              required:
-              - material_name
-              type: object
-            result: {}
-          required:
-          - goal
-          title: query_resource_by_name参数
-          type: object
-        type: UniLabJsonCommand
-      auto-workflow_sample_locations:
-        feedback: {}
-        goal: {}
-        goal_default:
-          workflow_id: null
-        handles: {}
-        placeholder_keys: {}
-        result: {}
-        schema:
-          description: ''
-          properties:
-            feedback: {}
-            goal:
-              properties:
-                workflow_id:
-                  type: string
-              required:
-              - workflow_id
-              type: object
-            result:
-              type: object
-          required:
-          - goal
-          title: workflow_sample_locations参数
-          type: object
-        type: UniLabJsonCommand
       batch_create_90_10_vial_feeding_tasks:
+        display_name: 批量90%10%小瓶投料
         feedback: {}
         goal:
           delay_time: delay_time
@@ -164,14 +29,14 @@ bioyond_dispensing_station:
             data_type: object
             handler_key: titration
             io_type: source
-            label: Titration Data From Calculation Node
+            label: 滴定信息（来自「计算实验设计」）
           output:
           - data_key: return_info
             data_source: executor
             data_type: string
             handler_key: BATCH_CREATE_RESULT
             io_type: sink
-            label: Complete Batch Create Result JSON (contains order_codes and order_ids)
+            label: 批量任务结果（→「等待任务完成并获取报告」）
         placeholder_keys: {}
         result: {}
         schema:
@@ -182,24 +47,30 @@ bioyond_dispensing_station:
             goal:
               properties:
                 delay_time:
-                  description: 延迟时间(秒),默认600
+                  description: 搅拌时间（s），默认600s
+                  title: 搅拌时间(s)
                   type: string
                 hold_m_name:
-                  description: 库位名称,如"C01",必填参数
+                  description: 6孔板库位名称，如"C01"，必填
+                  title: 6孔板库位名称
                   type: string
                 liquid_material_name:
                   default: NMP
-                  description: 10%物料的液体物料名称,默认为"NMP"
+                  description: 10%物料的液体物料名称，默认为"NMP"
+                  title: 10%部分溶剂名称
                   type: string
                 speed:
-                  description: 搅拌速度,默认400
+                  description: 搅拌速度（rpm），不填则默认400
+                  title: 搅拌速度(rpm)
                   type: string
                 temperature:
-                  description: 温度(℃),默认40
+                  description: 搅拌温度（℃），不填则默认40
+                  title: 搅拌温度(℃)
                   type: string
                 titration:
-                  description: '滴定信息对象,包含: name(物料名称), main_portion(主称固体质量g), titration_portion(滴定固体质量g),
-                    titration_solvent(滴定溶液体积mL)'
+                  description: 滴定信息对象，包含 name(物料名称)、main_portion(主称固体质量g)、titration_portion(滴定固体质量g)、titration_solvent(滴定溶液体积mL)，通常由
+                    compute_experiment_design 连线传入
+                  title: 滴定信息
                   type: string
               required:
               - titration
@@ -214,6 +85,7 @@ bioyond_dispensing_station:
           type: object
         type: UniLabJsonCommand
       batch_create_diamine_solution_tasks:
+        display_name: 批量二胺配液
         feedback: {}
         goal:
           delay_time: delay_time
@@ -234,14 +106,14 @@ bioyond_dispensing_station:
             data_type: array
             handler_key: solutions
             io_type: source
-            label: Solution Data From Python
+            label: 溶液列表（来自「计算实验设计」）
           output:
           - data_key: return_info
             data_source: executor
             data_type: string
             handler_key: BATCH_CREATE_RESULT
             io_type: sink
-            label: Complete Batch Create Result JSON (contains order_codes and order_ids)
+            label: 批量任务结果（→「等待任务完成并获取报告」）
         placeholder_keys: {}
         result: {}
         schema:
@@ -252,23 +124,26 @@ bioyond_dispensing_station:
             goal:
               properties:
                 delay_time:
-                  description: 溶液配置完成后的延迟时间（秒），用于充分混合和溶解，默认600秒
+                  description: 搅拌时间（s），默认600s
+                  title: 搅拌时间(s)
                   type: string
                 liquid_material_name:
                   default: NMP
                   description: 液体溶剂名称，用于溶解固体物料，默认为NMP（N-甲基吡咯烷酮）
+                  title: 溶剂名称
                   type: string
                 solutions:
-                  description: '溶液列表，JSON数组格式，每个元素包含: name(物料名称), order(序号), solid_mass(固体质量g),
-                    solvent_volume(溶剂体积mL)。示例: [{"name": "MDA", "order": 0, "solid_mass":
-                    5.0, "solvent_volume": 20}, {"name": "MPDA", "order": 1, "solid_mass":
-                    4.5, "solvent_volume": 18}]'
+                  description: 溶液列表，JSON数组格式，每个元素包含 name(物料名称)、order(序号)、solid_mass(固体质量g)、solvent_volume(溶剂体积mL)，通常由
+                    compute_experiment_design 连线传入
+                  title: 溶液列表
                   type: string
                 speed:
-                  description: 搅拌速度（rpm），用于混合溶液，默认400转/分钟
+                  description: 搅拌速度（rpm），用于混合溶液，不填则默认400转/分钟
+                  title: 搅拌速度(rpm)
                   type: string
                 temperature:
-                  description: 配置温度（℃），溶液配置过程的目标温度，默认20℃（室温）
+                  description: 搅拌温度（℃），不填则默认20℃（室温）
+                  title: 搅拌温度(℃)
                   type: string
               required:
               - solutions
@@ -283,6 +158,7 @@ bioyond_dispensing_station:
           type: object
         type: UniLabJsonCommand
       compute_experiment_design:
+        display_name: 计算实验设计
         feedback: {}
         goal:
           m_tot: m_tot
@@ -301,25 +177,25 @@ bioyond_dispensing_station:
             data_type: array
             handler_key: solutions
             io_type: sink
-            label: Solution Data From Python
+            label: 溶液列表（→「批量二胺配液」）
           - data_key: titration
             data_source: executor
             data_type: object
             handler_key: titration
             io_type: sink
-            label: Titration Data From Calculation Node
+            label: 滴定信息（→「批量90%10%小瓶投料」）
           - data_key: solvents
             data_source: executor
             data_type: object
             handler_key: solvents
             io_type: sink
-            label: Solvents Data From Calculation Node
+            label: 溶剂信息（→反应站「液体进料-溶剂」）
           - data_key: feeding_order
             data_source: executor
             data_type: array
             handler_key: feeding_order
             io_type: sink
-            label: Feeding Order Data From Calculation Node
+            label: 投料顺序（→反应站「【配液联动】液体进料(滴定)」）
         placeholder_keys: {}
         result: {}
         schema:
@@ -330,18 +206,22 @@ bioyond_dispensing_station:
               properties:
                 m_tot:
                   default: '70'
-                  description: 总质量(g)
+                  description: 反应混合物总质量(g)
+                  title: 总质量(g)
                   type: string
                 ratio:
                   description: 组分摩尔比的对象，保持输入顺序，如{"MDA":1,"BTDA":1}
+                  title: 组分摩尔比
                   type: object
                 titration_percent:
                   default: '0.03'
-                  description: 滴定比例(10%部分)
+                  description: 滴定比例(10%部分)，如 0.03
+                  title: 滴定比例
                   type: string
                 wt_percent:
                   default: '0.25'
-                  description: 目标固含质量分数
+                  description: 目标固含质量分数，如 0.25
+                  title: 目标固含量
                   type: string
               required:
               - ratio
@@ -381,6 +261,7 @@ bioyond_dispensing_station:
           type: object
         type: UniLabJsonCommand
       create_90_10_vial_feeding_task:
+        display_name: 90%10%小瓶投料(单个)
         feedback: {}
         goal:
           delay_time: delay_time
@@ -435,7 +316,8 @@ bioyond_dispensing_station:
         result:
           return_info: return_info
         schema:
-          description: ''
+          description: 创建单个90%10%小瓶投料任务：最多3种90%固体物料和3种10%物料（固体+溶剂），不用的物料留空。批量投料请用
+            batch_create_90_10_vial_feeding_tasks
           properties:
             feedback:
               additionalProperties: true
@@ -445,50 +327,96 @@ bioyond_dispensing_station:
               additionalProperties: false
               properties:
                 delay_time:
+                  description: 搅拌时间（s），默认600s
+                  title: 搅拌时间(s)
                   type: string
                 hold_m_name:
+                  description: 6孔板库位名称，如"C01"，用于查找对应的库位ID
+                  title: 6孔板库位名称
                   type: string
                 order_name:
+                  description: 任务名称，不填则使用默认名称
+                  title: 任务名称
                   type: string
                 percent_10_1_assign_material_name:
+                  description: 10%部分第1种固体物料名称，不用则留空
+                  title: 10%物料1-固体名称
                   type: string
                 percent_10_1_liquid_material_name:
+                  description: 10%部分第1种物料的溶剂名称，如 NMP
+                  title: 10%物料1-溶剂名称
                   type: string
                 percent_10_1_target_weigh:
+                  description: 10%部分第1种固体物料目标重量（g）
+                  title: 10%物料1-固体重量(g)
                   type: string
                 percent_10_1_volume:
+                  description: 10%部分第1种物料的溶剂体积（mL）
+                  title: 10%物料1-溶剂体积(mL)
                   type: string
                 percent_10_2_assign_material_name:
+                  description: 10%部分第2种固体物料名称，不用则留空
+                  title: 10%物料2-固体名称
                   type: string
                 percent_10_2_liquid_material_name:
+                  description: 10%部分第2种物料的溶剂名称，如 NMP
+                  title: 10%物料2-溶剂名称
                   type: string
                 percent_10_2_target_weigh:
+                  description: 10%部分第2种固体物料目标重量（g）
+                  title: 10%物料2-固体重量(g)
                   type: string
                 percent_10_2_volume:
+                  description: 10%部分第2种物料的溶剂体积（mL）
+                  title: 10%物料2-溶剂体积(mL)
                   type: string
                 percent_10_3_assign_material_name:
+                  description: 10%部分第3种固体物料名称，不用则留空
+                  title: 10%物料3-固体名称
                   type: string
                 percent_10_3_liquid_material_name:
+                  description: 10%部分第3种物料的溶剂名称，如 NMP
+                  title: 10%物料3-溶剂名称
                   type: string
                 percent_10_3_target_weigh:
+                  description: 10%部分第3种固体物料目标重量（g）
+                  title: 10%物料3-固体重量(g)
                   type: string
                 percent_10_3_volume:
+                  description: 10%部分第3种物料的溶剂体积（mL）
+                  title: 10%物料3-溶剂体积(mL)
                   type: string
                 percent_90_1_assign_material_name:
+                  description: 90%部分第1种固体物料名称，不用则留空
+                  title: 90%物料1-名称
                   type: string
                 percent_90_1_target_weigh:
+                  description: 90%部分第1种固体物料目标重量（g）
+                  title: 90%物料1-重量(g)
                   type: string
                 percent_90_2_assign_material_name:
+                  description: 90%部分第2种固体物料名称，不用则留空
+                  title: 90%物料2-名称
                   type: string
                 percent_90_2_target_weigh:
+                  description: 90%部分第2种固体物料目标重量（g）
+                  title: 90%物料2-重量(g)
                   type: string
                 percent_90_3_assign_material_name:
+                  description: 90%部分第3种固体物料名称，不用则留空
+                  title: 90%物料3-名称
                   type: string
                 percent_90_3_target_weigh:
+                  description: 90%部分第3种固体物料目标重量（g）
+                  title: 90%物料3-重量(g)
                   type: string
                 speed:
+                  description: 搅拌速度（rpm），不填则默认400
+                  title: 搅拌速度(rpm)
                   type: string
                 temperature:
+                  description: 搅拌温度（℃），不填则默认40
+                  title: 搅拌温度(℃)
                   type: string
               title: DispenStationVialFeed_Goal
               type: object
@@ -505,6 +433,7 @@ bioyond_dispensing_station:
           type: object
         type: DispenStationVialFeed
       create_diamine_solution_task:
+        display_name: 二胺配液(单个)
         feedback: {}
         goal:
           delay_time: delay_time
@@ -531,7 +460,7 @@ bioyond_dispensing_station:
         result:
           return_info: return_info
         schema:
-          description: ''
+          description: 创建单个二胺溶液配置任务：称量固体物料、加入溶剂并搅拌混合。批量配置请用 batch_create_diamine_solution_tasks
           properties:
             feedback:
               additionalProperties: true
@@ -541,22 +470,40 @@ bioyond_dispensing_station:
               additionalProperties: false
               properties:
                 delay_time:
+                  description: 搅拌时间（s），默认600s
+                  title: 搅拌时间(s)
                   type: string
                 hold_m_name:
+                  description: 烧杯库位名称，如"ODA-1"，用于查找对应的库位ID
+                  title: 烧杯库位名称
                   type: string
                 liquid_material_name:
+                  description: 液体物料名称，如 NMP
+                  title: 溶剂名称
                   type: string
                 material_name:
+                  description: 固体物料名称，必填
+                  title: 固体物料名称
                   type: string
                 order_name:
+                  description: 任务名称，不填则使用默认名称
+                  title: 任务名称
                   type: string
                 speed:
+                  description: 搅拌速度（rpm），不填则默认400
+                  title: 搅拌速度(rpm)
                   type: string
                 target_weigh:
+                  description: 固体目标重量（g），必填
+                  title: 固体目标重量(g)
                   type: string
                 temperature:
+                  description: 搅拌温度（℃），不填则默认20
+                  title: 搅拌温度(℃)
                   type: string
                 volume:
+                  description: 液体体积（mL），必填
+                  title: 溶剂体积(mL)
                   type: string
               title: DispenStationSolnPrep_Goal
               type: object
@@ -573,6 +520,7 @@ bioyond_dispensing_station:
           type: object
         type: DispenStationSolnPrep
       scheduler_start:
+        display_name: 启动调度器
         feedback: {}
         goal: {}
         goal_default: {}
@@ -596,6 +544,7 @@ bioyond_dispensing_station:
           type: object
         type: UniLabJsonCommand
       transfer_materials_to_reaction_station:
+        display_name: 物料转移到反应站
         feedback: {}
         goal:
           target_device_id: target_device_id
@@ -615,9 +564,11 @@ bioyond_dispensing_station:
               properties:
                 target_device_id:
                   description: 目标反应站设备ID(所有转移组使用同一个设备)
+                  title: 目标反应站
                   type: string
                 transfer_groups:
-                  description: '转移任务组列表,每组包含:'
+                  description: 转移任务组列表，每组包含 materials(物料名称)、target_stack(目标堆栈，如"堆栈1左")、target_sites(目标库位，如"A01")
+                  title: 转移任务组
                   type: array
               required:
               - target_device_id
@@ -631,6 +582,7 @@ bioyond_dispensing_station:
           type: object
         type: UniLabJsonCommand
       wait_for_multiple_orders_and_get_reports:
+        display_name: 等待任务完成并获取报告
         feedback: {}
         goal:
           batch_create_result: batch_create_result
@@ -647,14 +599,14 @@ bioyond_dispensing_station:
             data_type: string
             handler_key: BATCH_CREATE_RESULT
             io_type: source
-            label: Batch Task Creation Result From Previous Step
+            label: 批量任务结果（来自批量配液/投料）
           output:
           - data_key: return_info
             data_source: handle
             data_type: string
             handler_key: batch_reports_result
             io_type: sink
-            label: Batch Order Completion Reports
+            label: 批量任务报告（→反应站「【配液联动】提取实际加料量」）
         placeholder_keys: {}
         result: {}
         schema:
@@ -666,14 +618,17 @@ bioyond_dispensing_station:
               properties:
                 batch_create_result:
                   description: 批量创建任务的返回结果对象，包含order_codes和order_ids数组。从上游batch_create节点通过handle传递
+                  title: 批量任务结果
                   type: string
                 check_interval:
                   default: 10
                   description: 检查任务状态的时间间隔（秒），默认每10秒检查一次所有待完成任务
+                  title: 检查间隔(秒)
                   type: integer
                 timeout:
                   default: 7200
                   description: 等待超时时间（秒），默认7200秒（2小时）。超过此时间未完成的任务将标记为timeout
+                  title: 超时时间(秒)
                   type: integer
               required: []
               title: WaitForMultipleOrdersAndGetReports_Goal
