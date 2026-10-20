@@ -390,7 +390,7 @@ class BioyondReactionStation(BioyondWorkstation):
         Args:
             material_id[粉末类型]: 粉末类型，从下拉框选择 Salt / Flour / BTDA
             time[观察时间(分钟)]: 观察时间(分钟)
-            torque_variation[是否观察]: 是否观察扭矩变化，NO=否，YES=是
+            torque_variation[是否观察]: 是否观察，NO=否，YES=是
             assign_material_name[物料名称]: 物料名称(用于获取试剂瓶位ID)
             temperature[温度(℃)]: 温度设定(C)
         """
@@ -449,7 +449,7 @@ class BioyondReactionStation(BioyondWorkstation):
             assign_material_name[物料名称]: 物料名称
             titration_type[是否滴定]: 是否滴定，NO=否，YES=是
             time[观察时间(分钟)]: 观察时间(分钟)
-            torque_variation[是否观察]: 是否观察扭矩变化，NO=否，YES=是
+            torque_variation[是否观察]: 是否观察，NO=否，YES=是
             temperature[温度(℃)]: 温度(C)
         """
         # 参数映射
@@ -508,12 +508,11 @@ class BioyondReactionStation(BioyondWorkstation):
 
         Args:
             assign_material_name[物料名称]: 物料名称
-            volume[分液量(μL)]: 分液量(μL),直接指定体积(可选,如果提供solvents则自动计算)
-            solvents[溶剂信息]: 【可选，一般不填】溶剂信息字典或JSON字符串，由上游计算节点连线传入，
-              取其中 additional_solvent（mL）换算为μL 作为分液量
+            volume[分液量(μL)]: 分液量(μL)，单独使用反应站时必填；联动配液站时留空，由溶剂信息自动计算
+            solvents[溶剂信息]: 【配液联动】由配液站「计算实验设计」的溶剂信息连线传入，单独使用时不填
             titration_type[是否滴定]: 是否滴定，NO=否，YES=是
             time[观察时间(分钟)]: 观察时间(分钟)
-            torque_variation[是否观察]: 是否观察扭矩变化，NO=否，YES=是
+            torque_variation[是否观察]: 是否观察，NO=否，YES=是
             temperature[温度(℃)]: 温度设定(C)
         """
         # 参数映射
@@ -584,10 +583,7 @@ class BioyondReactionStation(BioyondWorkstation):
     def liquid_feeding_titration(
         self,
         assign_material_name: str,
-        volume_formula: str = None,
-        x_value: str = None,
-        feeding_order_data: str = None,
-        extracted_actuals: str = None,
+        volume_formula: str,
         titration_type: Literal["NO", "YES"] = "YES",
         time: str = "90",
         torque_variation: Literal["NO", "YES"] = "YES",
@@ -595,20 +591,78 @@ class BioyondReactionStation(BioyondWorkstation):
     ):
         """液体进料(滴定)
 
-        支持两种模式:
-        1. 直接提供 volume_formula (传统方式)
-        2. 自动计算公式: 提供 x_value, feeding_order_data, extracted_actuals (新方式)
+        单独使用反应站时的滴定投料，直接填写分液公式。联动配液站自动计算请使用「【配液联动】液体进料(滴定)」。
 
         Args:
             assign_material_name[物料名称]: 物料名称
             volume_formula[分液公式(ml)]: 分液公式（ml），输入常数或公式，如"1+2*{{4-0-5}}"
-            x_value[x值]: 【可选，一般不填】自动计算公式用的x值，格式如 "1-2-3"
-            feeding_order_data[投料顺序数据]: 【可选，一般不填】feeding_order JSON字符串或对象，用于自动计算时获取m二酐值
-            extracted_actuals[实际加料量数据]: 【可选，一般不填】从报告提取的实际加料量JSON字符串，用于自动计算公式
             titration_type[是否滴定]: 是否滴定，NO=否，YES=是
             time[观察时间(分钟)]: 观察时间(分钟)
-            torque_variation[是否观察]: 是否观察扭矩变化，NO=否，YES=是
+            torque_variation[是否观察]: 是否观察，NO=否，YES=是
             temperature[温度(℃)]: 温度(C)
+        """
+        return self._liquid_feeding_titration_impl(
+            assign_material_name=assign_material_name,
+            volume_formula=volume_formula,
+            titration_type=titration_type,
+            time=time,
+            torque_variation=torque_variation,
+            temperature=temperature,
+        )
+
+    def liquid_feeding_titration_linked(
+        self,
+        assign_material_name: str,
+        x_value: str,
+        feeding_order_data: str,
+        extracted_actuals: str,
+        titration_type: Literal["NO", "YES"] = "YES",
+        time: str = "90",
+        torque_variation: Literal["NO", "YES"] = "YES",
+        temperature: float = 25.00
+    ):
+        """【配液联动】液体进料(滴定)
+
+        联动配液站时的滴定投料，根据配液站的投料顺序和实际加料量自动计算分液公式 1000*(m二酐-x)*V二酐滴定/m二酐滴定。
+
+        Args:
+            assign_material_name[物料名称]: 物料名称
+            x_value[x值]: 自动计算公式中的x值，格式如 "1-2-3"，需手动填写
+            feeding_order_data[投料顺序数据]: 【配液联动】由配液站「计算实验设计」的投料顺序连线传入
+            extracted_actuals[实际加料量数据]: 【配液联动】由「提取实际加料量」连线传入
+            titration_type[是否滴定]: 是否滴定，NO=否，YES=是
+            time[观察时间(分钟)]: 观察时间(分钟)
+            torque_variation[是否观察]: 是否观察，NO=否，YES=是
+            temperature[温度(℃)]: 温度(C)
+        """
+        return self._liquid_feeding_titration_impl(
+            assign_material_name=assign_material_name,
+            x_value=x_value,
+            feeding_order_data=feeding_order_data,
+            extracted_actuals=extracted_actuals,
+            titration_type=titration_type,
+            time=time,
+            torque_variation=torque_variation,
+            temperature=temperature,
+        )
+
+    def _liquid_feeding_titration_impl(
+        self,
+        assign_material_name: str,
+        volume_formula: str = None,
+        x_value: str = None,
+        feeding_order_data: str = None,
+        extracted_actuals: str = None,
+        titration_type: str = "YES",
+        time: str = "90",
+        torque_variation: str = "YES",
+        temperature: float = 25.00
+    ):
+        """液体进料(滴定)的实际实现，供单独使用和配液联动两个动作共用
+
+        支持两种模式:
+        1. 直接提供 volume_formula
+        2. 自动计算公式: 提供 x_value, feeding_order_data, extracted_actuals
 
         自动公式模板: 1000*(m二酐-x)*V二酐滴定/m二酐滴定
         其中:
@@ -1000,6 +1054,7 @@ class BioyondReactionStation(BioyondWorkstation):
         except Exception as e:
             return {"processed": False, "error": str(e)}
 
+    @not_action
     def wait_for_multiple_orders_and_get_reports(self, batch_create_result: str = None, timeout: int = 7200, check_interval: int = 10) -> Dict[str, Any]:
         try:
             timeout = int(timeout) if timeout else 7200
@@ -1164,9 +1219,9 @@ class BioyondReactionStation(BioyondWorkstation):
 
         Args:
             volume[分液质量(g)]: 分液质量(g)
-            assign_material_name[物料名称]: 物料名称(试剂瓶位)
+            assign_material_name[烧杯名称]: 烧杯名称
             time[观察时间(分钟)]: 观察时间(分钟)
-            torque_variation[是否观察]: 是否观察扭矩变化，NO=否，YES=是
+            torque_variation[是否观察]: 是否观察，NO=否，YES=是
             titration_type[是否滴定]: 是否滴定，NO=否，YES=是
             temperature[温度(℃)]: 温度设定(C)
         """
@@ -1228,7 +1283,7 @@ class BioyondReactionStation(BioyondWorkstation):
             volume[分液量(μL)]: 分液量(μL)
             titration_type[是否滴定]: 是否滴定，NO=否，YES=是
             time[观察时间(分钟)]: 观察时间(分钟)
-            torque_variation[是否观察]: 是否观察扭矩变化，NO=否，YES=是
+            torque_variation[是否观察]: 是否观察，NO=否，YES=是
             temperature[温度(℃)]: 温度(C)
         """
         # 参数映射
