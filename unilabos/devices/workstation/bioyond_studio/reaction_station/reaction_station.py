@@ -1,12 +1,13 @@
 import json
 import time
 import requests
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Literal
 import json
 import requests
 from pathlib import Path
 from datetime import datetime
 from unilabos.devices.workstation.bioyond_studio.station import BioyondWorkstation
+from unilabos.registry.decorators import not_action
 from unilabos.devices.workstation.bioyond_studio.bioyond_rpc import MachineState
 from unilabos.ros.msgs.message_converter import convert_to_ros_msg, Float64, String
 
@@ -280,6 +281,7 @@ class BioyondReactionStation(BioyondWorkstation):
         return json.dumps(self._cached_workflow_sequence, ensure_ascii=False)
 
     @workflow_sequence.setter
+    @not_action
     def workflow_sequence(self, value: List[str]):
         """设置工作流序列
 
@@ -329,9 +331,9 @@ class BioyondReactionStation(BioyondWorkstation):
         """反应器放入
 
         Args:
-            assign_material_name: 物料名称(不能为空)
-            cutoff: 粘度上限(需为有效数字字符串,默认 "900000")
-            temperature: 温度设定(C,范围:-50.00 至 100.00)
+            assign_material_name[物料名称]: 物料名称(补充液名称，不能为空)
+            cutoff[粘度上限]: 粘度上限(需为有效数字字符串,默认 "900000")
+            temperature[温度(℃)]: 温度设定(C,范围:-50.00 至 100.00)
 
         Returns:
             str: JSON 字符串,格式为 {"suc": True}
@@ -377,20 +379,20 @@ class BioyondReactionStation(BioyondWorkstation):
 
     def solid_feeding_vials(
         self,
-        material_id: str,
+        material_id: Literal["Salt", "Flour", "BTDA"],
         time: str = "0",
-        torque_variation: int = 1,
+        torque_variation: Literal["NO", "YES"] = "NO",
         assign_material_name: str = None,
         temperature: float = 25.00
     ):
         """固体进料小瓶
 
         Args:
-            material_id: 粉末类型ID, Salt=1, Flour=2, BTDA=3
-            time: 观察时间(分钟)
-            torque_variation: 是否观察(NO=1, YES=2)
-            assign_material_name: 物料名称(用于获取试剂瓶位ID)
-            temperature: 温度设定(C)
+            material_id[粉末类型]: 粉末类型，从下拉框选择 Salt / Flour / BTDA
+            time[观察时间(分钟)]: 观察时间(分钟)
+            torque_variation[是否观察]: 是否观察扭矩变化，NO=否，YES=是
+            assign_material_name[物料名称]: 物料名称(用于获取试剂瓶位ID)
+            temperature[温度(℃)]: 温度设定(C)
         """
         # 参数映射
         material_map = {"Salt": "1", "Flour": "2", "BTDA": "3", "1": "1", "2": "2", "3": "3"}
@@ -435,20 +437,20 @@ class BioyondReactionStation(BioyondWorkstation):
         self,
         volume_formula: str,
         assign_material_name: str,
-        titration_type: str = "1",
+        titration_type: Literal["NO", "YES"] = "NO",
         time: str = "0",
-        torque_variation: int = 1,
+        torque_variation: Literal["NO", "YES"] = "NO",
         temperature: float = 25.00
     ):
         """液体进料小瓶(非滴定)
 
         Args:
-            volume_formula: 分液公式(μL)
-            assign_material_name: 物料名称
-            titration_type: 是否滴定(NO=1, YES=2)
-            time: 观察时间(分钟)
-            torque_variation: 是否观察(NO=1, YES=2)
-            temperature: 温度(C)
+            volume_formula[分液公式(ml)]: 分液公式（ml），输入常数或公式，如"1+2*{{4-0-5}}"
+            assign_material_name[物料名称]: 物料名称
+            titration_type[是否滴定]: 是否滴定，NO=否，YES=是
+            time[观察时间(分钟)]: 观察时间(分钟)
+            torque_variation[是否观察]: 是否观察扭矩变化，NO=否，YES=是
+            temperature[温度(℃)]: 温度(C)
         """
         # 参数映射
         titration_map = {"NO": "1", "YES": "2", "1": "1", "2": "2"}
@@ -497,26 +499,22 @@ class BioyondReactionStation(BioyondWorkstation):
         assign_material_name: str,
         volume: str = None,
         solvents = None,
-        titration_type: str = "1",
+        titration_type: Literal["NO", "YES"] = "NO",
         time: str = "360",
-        torque_variation: int = 2,
+        torque_variation: Literal["NO", "YES"] = "YES",
         temperature: float = 25.00
     ):
         """液体进料-溶剂
 
         Args:
-            assign_material_name: 物料名称
-            volume: 分液量(μL),直接指定体积(可选,如果提供solvents则自动计算)
-            solvents: 溶剂信息的字典或JSON字符串(可选),格式如下:
-              {
-                  "additional_solvent": 33.55092503597727,  # 溶剂体积(mL)
-                  "total_liquid_volume": 48.00916988195499
-              }
-              如果提供solvents,则从中提取additional_solvent并转换为μL
-            titration_type: 是否滴定(NO=1, YES=2)
-            time: 观察时间(分钟)
-            torque_variation: 是否观察(NO=1, YES=2)
-            temperature: 温度设定(C)
+            assign_material_name[物料名称]: 物料名称
+            volume[分液量(μL)]: 分液量(μL),直接指定体积(可选,如果提供solvents则自动计算)
+            solvents[溶剂信息]: 【可选，一般不填】溶剂信息字典或JSON字符串，由上游计算节点连线传入，
+              取其中 additional_solvent（mL）换算为μL 作为分液量
+            titration_type[是否滴定]: 是否滴定，NO=否，YES=是
+            time[观察时间(分钟)]: 观察时间(分钟)
+            torque_variation[是否观察]: 是否观察扭矩变化，NO=否，YES=是
+            temperature[温度(℃)]: 温度设定(C)
         """
         # 参数映射
         titration_map = {"NO": "1", "YES": "2", "1": "1", "2": "2"}
@@ -590,9 +588,9 @@ class BioyondReactionStation(BioyondWorkstation):
         x_value: str = None,
         feeding_order_data: str = None,
         extracted_actuals: str = None,
-        titration_type: str = "2",
+        titration_type: Literal["NO", "YES"] = "YES",
         time: str = "90",
-        torque_variation: int = 2,
+        torque_variation: Literal["NO", "YES"] = "YES",
         temperature: float = 25.00
     ):
         """液体进料(滴定)
@@ -602,15 +600,15 @@ class BioyondReactionStation(BioyondWorkstation):
         2. 自动计算公式: 提供 x_value, feeding_order_data, extracted_actuals (新方式)
 
         Args:
-            assign_material_name: 物料名称
-            volume_formula: 分液公式(μL),如果提供则直接使用,否则自动计算
-            x_value: 手工输入的x值,格式如 "1-2-3"
-            feeding_order_data: feeding_order JSON字符串或对象,用于获取m二酐值
-            extracted_actuals: 从报告提取的实际加料量JSON字符串,包含actualTargetWeigh和actualVolume
-            titration_type: 是否滴定(NO=1, YES=2),默认2
-            time: 观察时间(分钟)
-            torque_variation: 是否观察(NO=1, YES=2)
-            temperature: 温度(C)
+            assign_material_name[物料名称]: 物料名称
+            volume_formula[分液公式(ml)]: 分液公式（ml），输入常数或公式，如"1+2*{{4-0-5}}"
+            x_value[x值]: 【可选，一般不填】自动计算公式用的x值，格式如 "1-2-3"
+            feeding_order_data[投料顺序数据]: 【可选，一般不填】feeding_order JSON字符串或对象，用于自动计算时获取m二酐值
+            extracted_actuals[实际加料量数据]: 【可选，一般不填】从报告提取的实际加料量JSON字符串，用于自动计算公式
+            titration_type[是否滴定]: 是否滴定，NO=否，YES=是
+            time[观察时间(分钟)]: 观察时间(分钟)
+            torque_variation[是否观察]: 是否观察扭矩变化，NO=否，YES=是
+            temperature[温度(℃)]: 温度(C)
 
         自动公式模板: 1000*(m二酐-x)*V二酐滴定/m二酐滴定
         其中:
@@ -897,6 +895,7 @@ class BioyondReactionStation(BioyondWorkstation):
         print(f"[DEBUG] 返回结果: {result}")
         return result
 
+    @not_action
     def process_temperature_cutoff_report(self, report_request) -> Dict[str, Any]:
         try:
             data = report_request.data
@@ -1157,19 +1156,19 @@ class BioyondReactionStation(BioyondWorkstation):
         volume: str = "350",
         assign_material_name: str = "BAPP",
         time: str = "0",
-        torque_variation: int = 1,
-        titration_type: str = "1",
+        torque_variation: Literal["NO", "YES"] = "NO",
+        titration_type: Literal["NO", "YES"] = "NO",
         temperature: float = 25.00
     ):
         """液体进料烧杯
 
         Args:
-            volume: 分液质量(g)
-            assign_material_name: 物料名称(试剂瓶位)
-            time: 观察时间(分钟)
-            torque_variation: 是否观察(int类型, 1=否, 2=是)
-            titration_type: 是否滴定(NO=1, YES=2)
-            temperature: 温度设定(C)
+            volume[分液质量(g)]: 分液质量(g)
+            assign_material_name[物料名称]: 物料名称(试剂瓶位)
+            time[观察时间(分钟)]: 观察时间(分钟)
+            torque_variation[是否观察]: 是否观察扭矩变化，NO=否，YES=是
+            titration_type[是否滴定]: 是否滴定，NO=否，YES=是
+            temperature[温度(℃)]: 温度设定(C)
         """
         # 参数映射
         titration_map = {"NO": "1", "YES": "2", "1": "1", "2": "2"}
@@ -1217,20 +1216,20 @@ class BioyondReactionStation(BioyondWorkstation):
         self,
         assign_material_name: str,
         volume: str,
-        titration_type: str = "1",
+        titration_type: Literal["NO", "YES"] = "NO",
         time: str = "90",
-        torque_variation: int = 2,
+        torque_variation: Literal["NO", "YES"] = "YES",
         temperature: float = 25.00
     ):
         """滴回去
 
         Args:
-            assign_material_name: 物料名称(液体种类)
-            volume: 分液量(μL)
-            titration_type: 是否滴定(NO=1, YES=2)
-            time: 观察时间(分钟)
-            torque_variation: 是否观察(NO=1, YES=2)
-            temperature: 温度(C)
+            assign_material_name[物料名称]: 物料名称(液体种类)
+            volume[分液量(μL)]: 分液量(μL)
+            titration_type[是否滴定]: 是否滴定，NO=否，YES=是
+            time[观察时间(分钟)]: 观察时间(分钟)
+            torque_variation[是否观察]: 是否观察扭矩变化，NO=否，YES=是
+            temperature[温度(℃)]: 温度(C)
         """
         # 参数映射
         titration_map = {"NO": "1", "YES": "2", "1": "1", "2": "2"}
@@ -1337,6 +1336,7 @@ class BioyondReactionStation(BioyondWorkstation):
             workflow_names.append(workflow_name)
         return workflow_names
 
+    @not_action
     def sync_workflow_sequence_from_bioyond(self) -> dict:
         """从 Bioyond 系统同步工作流序列
 
@@ -1440,6 +1440,7 @@ class BioyondReactionStation(BioyondWorkstation):
                 "message": error_msg
             }
 
+    @not_action
     def workflow_step_query(self, workflow_id: str) -> dict:
         """查询工作流步骤参数
 
@@ -1451,6 +1452,7 @@ class BioyondReactionStation(BioyondWorkstation):
         """
         return self.hardware_interface.workflow_step_query(workflow_id)
 
+    @not_action
     def create_order(self, json_str: str) -> dict:
         """创建订单
 
@@ -1462,12 +1464,14 @@ class BioyondReactionStation(BioyondWorkstation):
         """
         return self.hardware_interface.create_order(json_str)
 
+    @not_action
     def clear_workflows(self):
         """清空缓存的工作流序列和参数"""
         self._cached_workflow_sequence = []
         self.pending_time_constraints = []
         print("已清空工作流序列缓存和时间约束队列")
 
+    @not_action
     def clean_all_server_workflows(self) -> Dict[str, Any]:
         """
         清空服务端所有非核心工作流
@@ -1520,6 +1524,7 @@ class BioyondReactionStation(BioyondWorkstation):
             print(f"❌ 清空工作流业务异常: {str(e)}")
             return {"code": 0, "message": str(e), "timestamp": int(time.time())}
 
+    @not_action
     def hard_delete_merged_workflows(self, workflow_ids: List[str]) -> Dict[str, Any]:
         """
         调用新接口:硬删除合并后的工作流
@@ -1669,6 +1674,7 @@ class BioyondReactionStation(BioyondWorkstation):
 
     # ==================== 工作流执行核心方法 ====================
 
+    @not_action
     def process_web_workflows(self, web_workflow_json: str) -> List[Dict[str, str]]:
         """处理网页工作流列表
 
@@ -1788,6 +1794,7 @@ class BioyondReactionStation(BioyondWorkstation):
             "step": step
         })
 
+    @not_action
     def merge_workflow_with_parameters(self, json_str: str) -> dict:
         """
         调用新接口:合并工作流并传递参数
@@ -2091,6 +2098,7 @@ class BioyondReactionStation(BioyondWorkstation):
             print(f"❌ 跳过滴定异常: {str(e)}")
             return {"code": 0, "message": str(e), "timestamp": int(time.time())}
 
+    @not_action
     def set_reactor_temperature(self, reactor_id: int, temperature: float) -> str:
         """
         设置反应器温度
