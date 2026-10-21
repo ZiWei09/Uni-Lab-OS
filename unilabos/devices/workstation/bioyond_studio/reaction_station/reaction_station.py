@@ -442,7 +442,7 @@ class BioyondReactionStation(BioyondWorkstation):
         torque_variation: Literal["NO", "YES"] = "NO",
         time: str = "0"
     ):
-        """液体进料小瓶(非滴定)
+        """液体进料-小瓶（非滴定）
 
         Args:
             volume_formula[分液公式(ml)]: 分液公式（ml），输入常数或公式，如"1+2*{{4-0-5}}"
@@ -490,7 +490,7 @@ class BioyondReactionStation(BioyondWorkstation):
         }
 
         self.pending_task_params.append(params)
-        print(f"成功添加液体进料小瓶(非滴定)参数: volume={volume_formula}μL, material={assign_material_name}->ID:{material_id}")
+        print(f"成功添加液体进料-小瓶（非滴定）参数: volume={volume_formula}μL, material={assign_material_name}->ID:{material_id}")
         print(f"当前队列长度: {len(self.pending_task_params)}")
         return json.dumps({"suc": True})
 
@@ -589,9 +589,9 @@ class BioyondReactionStation(BioyondWorkstation):
         torque_variation: Literal["NO", "YES"] = "YES",
         time: str = "90"
     ):
-        """液体进料(滴定)
+        """液体进料-小瓶（滴定）
 
-        单独使用反应站时的滴定投料，直接填写分液公式。联动配液站自动计算请使用「【配液联动】液体进料(滴定)」。
+        单独使用反应站时的滴定投料，直接填写分液公式。联动配液站自动计算请使用「【配液联动】液体进料-小瓶（滴定）」。
 
         Args:
             assign_material_name[物料名称]: 物料名称
@@ -621,7 +621,7 @@ class BioyondReactionStation(BioyondWorkstation):
         torque_variation: Literal["NO", "YES"] = "YES",
         time: str = "90"
     ):
-        """【配液联动】液体进料(滴定)
+        """【配液联动】液体进料-小瓶（滴定）
 
         联动配液站时的滴定投料，根据配液站的投料顺序和实际加料量自动计算分液公式 1000*(m二酐-x)*V二酐滴定/m二酐滴定。
 
@@ -658,7 +658,7 @@ class BioyondReactionStation(BioyondWorkstation):
         torque_variation: str = "YES",
         temperature: float = 25.00
     ):
-        """液体进料(滴定)的实际实现，供单独使用和配液联动两个动作共用
+        """液体进料-小瓶（滴定）的实际实现，供单独使用和配液联动两个动作共用
 
         支持两种模式:
         1. 直接提供 volume_formula
@@ -1215,7 +1215,7 @@ class BioyondReactionStation(BioyondWorkstation):
         time: str = "0",
         volume: str = "350"
     ):
-        """液体进料烧杯
+        """液体进料-烧杯
 
         Args:
             volume[分液质量(g)]: 分液质量(g)
@@ -1263,7 +1263,7 @@ class BioyondReactionStation(BioyondWorkstation):
         }
 
         self.pending_task_params.append(params)
-        print(f"成功添加液体进料烧杯参数: volume={volume}μL, material={assign_material_name}->ID:{material_id}")
+        print(f"成功添加液体进料-烧杯参数: volume={volume}μL, material={assign_material_name}->ID:{material_id}")
         print(f"当前队列长度: {len(self.pending_task_params)}")
         return json.dumps({"suc": True})
 
