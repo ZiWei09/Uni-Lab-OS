@@ -2165,7 +2165,11 @@ class Registry:
                 dev_cfg.pop("registry_type", None)
             try:
                 with open(file, "w", encoding="utf-8") as f:
-                    yaml.dump(write_data, f, allow_unicode=True, default_flow_style=False, Dumper=NoAliasDumper)
+                    # sort_keys=False：保留动作参数的函数签名顺序，前端按此顺序展示表单
+                    yaml.dump(
+                        write_data, f, allow_unicode=True, default_flow_style=False, Dumper=NoAliasDumper,
+                        sort_keys=False,
+                    )
             except Exception as e:
                 logger.warning(f"[UniLab Registry] 写入设备文件失败: {file}, 错误: {e}")
 

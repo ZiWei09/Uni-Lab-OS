@@ -1161,20 +1161,20 @@ class BioyondDispensingStation(BioyondWorkstation):
     # 批量创建90%10%小瓶投料任务
     def batch_create_90_10_vial_feeding_tasks(self,
                                               titration,
-                                              hold_m_name: str = None,
+                                              liquid_material_name: str = "NMP",
                                               speed: str = None,
                                               temperature: str = None,
                                               delay_time: str = None,
-                                              liquid_material_name: str = "NMP") -> str:
+                                              hold_m_name: str = None) -> str:
         """批量创建90%10%小瓶投料任务（仅创建1个任务，但包含所有90%和10%物料）
 
         Args:
             titration[滴定信息]: 滴定信息对象，包含 name(物料名称)、main_portion(主称固体质量g)、titration_portion(滴定固体质量g)、titration_solvent(滴定溶液体积mL)，通常由 compute_experiment_design 连线传入
-            hold_m_name[6孔板库位名称]: 6孔板库位名称，如"C01"，必填
+            liquid_material_name[10%部分溶剂名称]: 10%物料的液体物料名称，默认为"NMP"
             speed[搅拌速度(rpm)]: 搅拌速度（rpm），不填则默认400
             temperature[搅拌温度(℃)]: 搅拌温度（℃），不填则默认40
             delay_time[搅拌时间(s)]: 搅拌时间（s），默认600s
-            liquid_material_name[10%部分溶剂名称]: 10%物料的液体物料名称，默认为"NMP"
+            hold_m_name[6孔板库位名称]: 6孔板库位名称，如"C01"，必填
 
         titration 格式示例:
           {"name": "BTDA", "main_portion": 1.915, "titration_portion": 0.059, "titration_solvent": 3.05}

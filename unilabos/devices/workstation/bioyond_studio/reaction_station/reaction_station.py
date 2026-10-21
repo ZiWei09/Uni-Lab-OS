@@ -380,10 +380,10 @@ class BioyondReactionStation(BioyondWorkstation):
     def solid_feeding_vials(
         self,
         material_id: Literal["Salt", "Flour", "BTDA"],
-        time: str = "0",
-        torque_variation: Literal["NO", "YES"] = "NO",
         assign_material_name: str = None,
-        temperature: float = 25.00
+        temperature: float = 25.00,
+        torque_variation: Literal["NO", "YES"] = "NO",
+        time: str = "0"
     ):
         """固体进料小瓶
 
@@ -435,12 +435,12 @@ class BioyondReactionStation(BioyondWorkstation):
 
     def liquid_feeding_vials_non_titration(
         self,
-        volume_formula: str,
         assign_material_name: str,
+        volume_formula: str,
+        temperature: float = 25.00,
         titration_type: Literal["NO", "YES"] = "NO",
-        time: str = "0",
         torque_variation: Literal["NO", "YES"] = "NO",
-        temperature: float = 25.00
+        time: str = "0"
     ):
         """液体进料小瓶(非滴定)
 
@@ -497,12 +497,12 @@ class BioyondReactionStation(BioyondWorkstation):
     def liquid_feeding_solvents(
         self,
         assign_material_name: str,
-        volume: str = None,
         solvents = None,
+        temperature: float = 25.00,
         titration_type: Literal["NO", "YES"] = "NO",
-        time: str = "360",
         torque_variation: Literal["NO", "YES"] = "YES",
-        temperature: float = 25.00
+        time: str = "360",
+        volume: str = None
     ):
         """液体进料-溶剂
 
@@ -584,10 +584,10 @@ class BioyondReactionStation(BioyondWorkstation):
         self,
         assign_material_name: str,
         volume_formula: str,
+        temperature: float = 25.00,
         titration_type: Literal["NO", "YES"] = "YES",
-        time: str = "90",
         torque_variation: Literal["NO", "YES"] = "YES",
-        temperature: float = 25.00
+        time: str = "90"
     ):
         """液体进料(滴定)
 
@@ -616,10 +616,10 @@ class BioyondReactionStation(BioyondWorkstation):
         x_value: str,
         feeding_order_data: str,
         extracted_actuals: str,
+        temperature: float = 25.00,
         titration_type: Literal["NO", "YES"] = "YES",
-        time: str = "90",
         torque_variation: Literal["NO", "YES"] = "YES",
-        temperature: float = 25.00
+        time: str = "90"
     ):
         """【配液联动】液体进料(滴定)
 
@@ -1208,12 +1208,12 @@ class BioyondReactionStation(BioyondWorkstation):
 
     def liquid_feeding_beaker(
         self,
-        volume: str = "350",
         assign_material_name: str = "BAPP",
-        time: str = "0",
-        torque_variation: Literal["NO", "YES"] = "NO",
+        temperature: float = 25.00,
         titration_type: Literal["NO", "YES"] = "NO",
-        temperature: float = 25.00
+        torque_variation: Literal["NO", "YES"] = "NO",
+        time: str = "0",
+        volume: str = "350"
     ):
         """液体进料烧杯
 
@@ -1271,10 +1271,10 @@ class BioyondReactionStation(BioyondWorkstation):
         self,
         assign_material_name: str,
         volume: str,
+        temperature: float = 25.00,
         titration_type: Literal["NO", "YES"] = "NO",
-        time: str = "90",
         torque_variation: Literal["NO", "YES"] = "YES",
-        temperature: float = 25.00
+        time: str = "90"
     ):
         """滴回去
 
