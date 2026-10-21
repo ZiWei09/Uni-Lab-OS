@@ -508,7 +508,7 @@ class BioyondReactionStation(BioyondWorkstation):
 
         Args:
             assign_material_name[物料名称]: 物料名称
-            volume[分液量(μL)]: 分液量(μL)，单独使用反应站时必填；联动配液站时留空，由溶剂信息自动计算
+            volume[分液体积（ml）]: 分液体积（ml），单独使用反应站时必填；联动配液站时留空，由溶剂信息自动计算
             solvents[溶剂信息]: 【配液联动】由配液站「计算实验设计」的溶剂信息连线传入，单独使用时不填
             titration_type[是否滴定]: 是否滴定，NO=否，YES=是
             time[观察时间(分钟)]: 观察时间(分钟)
@@ -1280,7 +1280,7 @@ class BioyondReactionStation(BioyondWorkstation):
 
         Args:
             assign_material_name[物料名称]: 物料名称(液体种类)
-            volume[分液量(μL)]: 分液量(μL)
+            volume[分液体积（ml）]: 分液体积（ml）
             titration_type[是否滴定]: 是否滴定，NO=否，YES=是
             time[观察时间(分钟)]: 观察时间(分钟)
             torque_variation[是否观察]: 是否观察，NO=否，YES=是
