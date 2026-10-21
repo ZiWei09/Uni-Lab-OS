@@ -109,8 +109,8 @@ reaction_station.bioyond:
                   description: 物料名称(液体种类)
                 volume:
                   type: string
-                  title: 分液量(μL)
-                  description: 分液量(μL)
+                  title: 分液体积（ml）
+                  description: 分液体积（ml）
                 temperature:
                   type: number
                   default: 25.0
@@ -324,8 +324,8 @@ reaction_station.bioyond:
                   description: 观察时间(分钟)
                 volume:
                   type: string
-                  title: 分液量(μL)
-                  description: 分液量(μL)，单独使用反应站时必填；联动配液站时留空，由溶剂信息自动计算
+                  title: 分液体积（ml）
+                  description: 分液体积（ml），单独使用反应站时必填；联动配液站时留空，由溶剂信息自动计算
               required:
               - assign_material_name
             feedback: {}
