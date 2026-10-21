@@ -211,7 +211,7 @@ reaction_station.bioyond:
         result: {}
         schema:
           title: liquid_feeding_beaker参数
-          description: 液体进料烧杯
+          description: 液体进料-烧杯
           type: object
           properties:
             goal:
@@ -267,7 +267,7 @@ reaction_station.bioyond:
           volume: '350'
         handles: {}
         placeholder_keys: {}
-        display_name: 液体进料烧杯
+        display_name: 液体进料-烧杯
       liquid_feeding_solvents:
         type: UniLabJsonCommand
         goal:
@@ -363,7 +363,7 @@ reaction_station.bioyond:
         result: {}
         schema:
           title: liquid_feeding_titration参数
-          description: 液体进料(滴定)，单独使用反应站时直接填写分液公式。注意：一个实验只能设置一个小瓶滴定。联动配液站自动计算请使用「【配液联动】液体进料(滴定)」
+          description: 液体进料-小瓶（滴定），单独使用反应站时直接填写分液公式。注意：一个实验只能设置一个小瓶滴定。联动配液站自动计算请使用「【配液联动】液体进料-小瓶（滴定）」
           type: object
           properties:
             goal:
@@ -419,7 +419,7 @@ reaction_station.bioyond:
           time: '90'
         handles: {}
         placeholder_keys: {}
-        display_name: 液体进料(滴定)
+        display_name: 液体进料-小瓶（滴定）
       liquid_feeding_titration_linked:
         type: UniLabJsonCommand
         goal:
@@ -435,7 +435,7 @@ reaction_station.bioyond:
         result: {}
         schema:
           title: liquid_feeding_titration_linked参数
-          description: 【配液联动】液体进料(滴定)，根据配液站的投料顺序和实际加料量自动计算分液公式 1000*(m二酐-x)*V二酐滴定/m二酐滴定，x值需手动填写。注意：一个实验只能设置一个小瓶滴定。
+          description: 【配液联动】液体进料-小瓶（滴定），根据配液站的投料顺序和实际加料量自动计算分液公式 1000*(m二酐-x)*V二酐滴定/m二酐滴定，x值需手动填写。注意：一个实验只能设置一个小瓶滴定。
           type: object
           properties:
             goal:
@@ -516,7 +516,7 @@ reaction_station.bioyond:
             io_type: source
             label: 投料顺序（来自配液站「计算实验设计」）
         placeholder_keys: {}
-        display_name: 【配液联动】液体进料(滴定)
+        display_name: 【配液联动】液体进料-小瓶（滴定）
       liquid_feeding_vials_non_titration:
         type: UniLabJsonCommand
         goal:
@@ -530,7 +530,7 @@ reaction_station.bioyond:
         result: {}
         schema:
           title: liquid_feeding_vials_non_titration参数
-          description: 液体进料小瓶(非滴定)
+          description: 液体进料-小瓶（非滴定）
           type: object
           properties:
             goal:
@@ -586,7 +586,7 @@ reaction_station.bioyond:
           time: '0'
         handles: {}
         placeholder_keys: {}
-        display_name: 液体进料小瓶(非滴定)
+        display_name: 液体进料-小瓶（非滴定）
       process_and_execute_workflow:
         type: UniLabJsonCommand
         goal:

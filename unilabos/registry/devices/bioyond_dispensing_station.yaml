@@ -257,7 +257,7 @@ bioyond_dispensing_station:
             data_type: array
             handler_key: feeding_order
             io_type: sink
-            label: 投料顺序（→反应站「【配液联动】液体进料(滴定)」）
+            label: 投料顺序（→反应站「【配液联动】液体进料-小瓶（滴定）」）
         placeholder_keys: {}
         display_name: 计算实验设计
       create_90_10_vial_feeding_task:
