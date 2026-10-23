@@ -187,11 +187,8 @@ class BioyondResourceSynchronizer(ResourceSynchronizer):
                 deck=self.workstation.deck
             )
 
-            # 标记物料 ID 所属的 Bioyond 实例，跨站转运时据此识别外站 ID
-            for res in unilab_resources:
-                extra_info = getattr(res, "unilabos_extra", None) or {}
-                if extra_info.get("material_bioyond_id"):
-                    extra_info["material_bioyond_host"] = self.bioyond_api_client.host
+            # 标记物料 ID 的归属，跨站转运时据此识别外站 ID（启动同步时设备 ID 未就绪，在 post_init 补齐）
+            self.tag_bioyond_owner(unilab_resources)
 
             logger.info(f"从Bioyond同步了 {len(unilab_resources)} 个资源")
             return True
@@ -207,30 +204,61 @@ class BioyondResourceSynchronizer(ResourceSynchronizer):
                 return True
         return False
 
+    def _owner_device_id(self) -> Optional[str]:
+        """本站在 UniLab 中的设备 ID；post_init 之前（ROS 节点未就绪）返回 None"""
+        ros_node = getattr(self.workstation, "_ros_node", None)
+        return getattr(ros_node, "device_id", None)
+
+    def tag_bioyond_owner(self, resources: List[Any]) -> None:
+        """给带 Bioyond ID 的物料打上归属标记：所属设备 ID + Bioyond 地址"""
+        owner = self._owner_device_id()
+        for res in resources:
+            extra_info = getattr(res, "unilabos_extra", None) or {}
+            if not extra_info.get("material_bioyond_id"):
+                continue
+            extra_info["material_bioyond_host"] = self.bioyond_api_client.host
+            if owner:
+                extra_info["material_bioyond_owner"] = owner
+
+    def _is_own_bioyond_id(self, extra_info: Dict[str, Any]) -> bool:
+        """判断物料上的 Bioyond ID 是否属于本站
+
+        优先按设备 ID 判断（多机部署时各站 api_host 可能都是 127.0.0.1，无法区分）；
+        没有设备标记的旧数据再按 Bioyond 地址判断，地址也没有时查本站库存
+        """
+        source_owner = extra_info.get("material_bioyond_owner")
+        own_owner = self._owner_device_id()
+        if source_owner and own_owner:
+            return source_owner == own_owner
+
+        source_host = extra_info.get("material_bioyond_host")
+        if source_host:
+            return source_host == self.bioyond_api_client.host
+        return self._exists_in_stock(extra_info["material_bioyond_id"])
+
     def release_foreign_bioyond_id(self, resource: Any) -> None:
-        """物料带着其它 Bioyond 实例（如配液站）的 ID 转运进来时，丢弃该 ID，交由本站重新创建"""
+        """物料带着其它站 Bioyond 的 ID 转运进来时，丢弃该 ID，交由本站重新创建"""
         extra_info = getattr(resource, "unilabos_extra", None) or {}
         material_bioyond_id = extra_info.get("material_bioyond_id")
         if not material_bioyond_id:
             return
 
-        own_host = self.bioyond_api_client.host
-        source_host = extra_info.get("material_bioyond_host")
-        if source_host == own_host:
-            return
-        if source_host is None and self._exists_in_stock(material_bioyond_id):
-            # 旧数据没有来源标记，但本站库存里查得到，视为本站物料
-            extra_info["material_bioyond_host"] = own_host
+        if self._is_own_bioyond_id(extra_info):
+            # 旧数据补齐归属标记
+            self.tag_bioyond_owner([resource])
             return
 
+        source_owner = extra_info.get("material_bioyond_owner")
+        source_host = extra_info.get("material_bioyond_host")
         logger.info(
             f"[跨站转运] 物料 {resource.name} 的 Bioyond ID {material_bioyond_id[:8]}... "
-            f"来自 {source_host or '未知实例'}，不属于本站 {own_host}，将在本站重新创建"
+            f"来自 {source_owner or source_host or '未知站点'}，不属于本站 {self._owner_device_id()}，将在本站重新创建"
         )
-        extra_info.pop("material_bioyond_id")
-        extra_info.pop("material_bioyond_host", None)
+        for key in ("material_bioyond_id", "material_bioyond_host", "material_bioyond_owner"):
+            extra_info.pop(key, None)
         extra_info["source_bioyond_id"] = material_bioyond_id
         extra_info["source_bioyond_host"] = source_host
+        extra_info["source_bioyond_owner"] = source_owner
         setattr(resource, "unilabos_extra", extra_info)
 
     def _clear_warehouse_sites(self) -> int:
@@ -649,8 +677,8 @@ class BioyondResourceSynchronizer(ResourceSynchronizer):
 
             # 保存 Bioyond ID 到资源对象
             extra_info["material_bioyond_id"] = material_id
-            extra_info["material_bioyond_host"] = self.bioyond_api_client.host
             setattr(resource, "unilabos_extra", extra_info)
+            self.tag_bioyond_owner([resource])
 
             return material_id
 
@@ -867,6 +895,9 @@ class BioyondWorkstation(WorkstationBase):
 
     def post_init(self, ros_node: ROS2WorkstationNode):
         self._ros_node = ros_node
+
+        # 启动同步发生在 __init__，那时设备 ID 未就绪，这里给已同步的物料补上归属标记
+        self.resource_synchronizer.tag_bioyond_owner(self.deck.get_all_children())
 
         # 启动连接监控
         try:
