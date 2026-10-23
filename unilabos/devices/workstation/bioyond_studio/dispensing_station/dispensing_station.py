@@ -25,6 +25,8 @@ class ComputeExperimentDesignReturn(TypedDict):
 
 
 class BioyondDispensingStation(BioyondWorkstation):
+    bioyond_is_source_of_truth = True
+
     def __init__(
         self,
         config: dict = None,

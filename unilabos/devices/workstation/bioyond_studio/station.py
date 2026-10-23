@@ -23,6 +23,7 @@ from unilabos.ros.nodes.base_device_node import ROS2DeviceNode, BaseROS2DeviceNo
 from unilabos.ros.nodes.presets.workstation import ROS2WorkstationNode
 from unilabos.ros.msgs.message_converter import convert_to_ros_msg, Float64, String
 from pylabrobot.resources.resource import Resource as ResourcePLR
+from pylabrobot.resources import ResourceHolder
 
 
 from unilabos.devices.workstation.workstation_http_service import WorkstationHTTPService
@@ -174,6 +175,11 @@ class BioyondResourceSynchronizer(ResourceSynchronizer):
                 logger.warning("从Bioyond获取的物料数据为空")
                 return False
 
+            # 以 Bioyond 为准：查询成功后先清空库位，丢弃云端/上次同步残留的物料，再按 Bioyond 全量重填
+            if getattr(self.workstation, "bioyond_is_source_of_truth", False):
+                cleared = self._clear_warehouse_sites()
+                logger.info(f"[以Bioyond为准] 已清空 {cleared} 个堆栈库位，按 Bioyond 在库物料重新放置")
+
             # 转换为UniLab格式
             unilab_resources = resource_bioyond_to_plr(
                 all_bioyond_data,
@@ -186,6 +192,22 @@ class BioyondResourceSynchronizer(ResourceSynchronizer):
         except Exception as e:
             logger.error(f"从Bioyond同步物料数据失败: {e}")
             return False
+
+    def _clear_warehouse_sites(self) -> int:
+        """清空 deck 上所有堆栈的库位占用，返回被清掉的库位数"""
+        cleared = 0
+        warehouses = getattr(self.workstation.deck, "warehouses", None) or {}
+        for warehouse in warehouses.values():
+            for idx, occupant in enumerate(list(warehouse.sites)):
+                if occupant is None or isinstance(occupant, ResourceHolder):
+                    continue
+                if isinstance(occupant, ResourcePLR):
+                    warehouse.unassign_child_resource(occupant)
+                else:
+                    # 云端反序列化留下的名称字符串占位
+                    warehouse.sites[idx] = None
+                cleared += 1
+        return cleared
 
     def sync_to_external(self, resource: Any) -> bool:
         """将本地物料数据变更同步到Bioyond系统"""
@@ -677,6 +699,9 @@ class BioyondWorkstation(WorkstationBase):
 
     集成Bioyond物料管理的工作站实现
     """
+
+    # 物料是否以 Bioyond 为准：为 True 时每次从 Bioyond 同步前清空堆栈库位，云端残留不再占位
+    bioyond_is_source_of_truth: bool = False
 
     def _publish_task_status(
         self,

@@ -671,6 +671,15 @@ def resource_plr_to_ulab(resource_plr: "ResourcePLR", parent_name: str = None, w
     return r
 
 
+# Bioyond 物料 → UniLab UUID 的固定命名空间：同一个 Bioyond 物料每次同步都得到相同的 UUID，云端才能对上
+BIOYOND_UUID_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "https://unilabos/bioyond/material")
+
+
+def bioyond_stable_uuid(*parts: Any) -> str:
+    """由 Bioyond 物料 ID 等稳定字段推导固定 UUID"""
+    return str(uuid.uuid5(BIOYOND_UUID_NAMESPACE, ":".join(str(p) for p in parts)))
+
+
 def resource_bioyond_to_plr(bioyond_materials: list[dict], type_mapping: Dict[str, Tuple[str, str]] = {}, deck: Any = None) -> list[dict]:
     """
     将 bioyond 物料格式转换为 ulab 物料格式
@@ -704,7 +713,8 @@ def resource_bioyond_to_plr(bioyond_materials: list[dict], type_mapping: Dict[st
     # 用于跟踪同名物料的计数器
     name_counter = {}
 
-    for material in bioyond_materials:
+    # 按 Bioyond ID 排序，保证同名物料的后缀（_2、_3）不随接口返回顺序变化
+    for material in sorted(bioyond_materials, key=lambda m: str(m.get("id") or "")):
         # 从反向映射中查找: typeName(显示名称) -> (model, UUID)
         type_info = reverse_type_mapping.get(material.get("typeName"))
         className = type_info[0] if type_info else "RegularContainer"
@@ -737,7 +747,7 @@ def resource_bioyond_to_plr(bioyond_materials: list[dict], type_mapping: Dict[st
             continue
 
         plr_material.code = material.get("code", "") and material.get("barCode", "") or ""
-        plr_material.unilabos_uuid = str(uuid.uuid4())
+        plr_material.unilabos_uuid = bioyond_stable_uuid(material["id"]) if material.get("id") else str(uuid.uuid4())
 
         # ⭐ 保存 Bioyond 原始信息到 unilabos_extra（用于出库时查询）
         plr_material.unilabos_extra = {
@@ -804,6 +814,11 @@ def resource_bioyond_to_plr(bioyond_materials: list[dict], type_mapping: Dict[st
                             (detail["name"], float(detail.get("quantity", 0)) if detail.get("quantity") else 0)
                         ]
                     bottle.code = detail.get("code", "")
+                    # 子物料有自己的 Bioyond ID 就用它，否则用 父物料ID + 槽位 推导
+                    if detail.get("id"):
+                        bottle.unilabos_uuid = bioyond_stable_uuid(detail["id"])
+                    elif material.get("id"):
+                        bottle.unilabos_uuid = bioyond_stable_uuid(material["id"], "slot", number)
                     logger.debug(f"  └─ [子物料] {detail['name']} → {plr_material.name}[{number}] (类型:{typeName})")
                 else:
                     logger.warning(f"  └─ [子物料警告] {detail['name']} 的类型 '{typeName}' 不在mapping中，跳过")
@@ -913,10 +928,21 @@ def resource_bioyond_to_plr(bioyond_materials: list[dict], type_mapping: Dict[st
                             logger.debug(f"列优先warehouse {wh_name}: x={x}(行),y={y}(列) → row={row_idx},col={col_idx} → idx={idx}")
 
                     if 0 <= idx < warehouse.capacity:
-                        if warehouse[idx] is None or isinstance(warehouse[idx], ResourceHolder):
+                        occupant = warehouse[idx]
+                        if isinstance(occupant, str):
+                            # 云端反序列化留下的名称占位（不是真实物料对象），以 Bioyond 为准直接覆盖
+                            logger.debug(f"[物料位置] {wh_name}[{idx}] 的占位 '{occupant}' 被 Bioyond 物料 {unique_name} 覆盖")
+                            warehouse.sites[idx] = None
+                            occupant = None
+                        if occupant is None or isinstance(occupant, ResourceHolder):
                             # 物料尺寸已在放入warehouse前根据需要进行了交换
                             warehouse[idx] = plr_material
                             logger.debug(f"✅ 物料 {unique_name} 放置到 {wh_name}[{idx}] (Bioyond坐标: x={loc.get('x')}, y={loc.get('y')})")
+                        else:
+                            logger.warning(
+                                f"⚠️ 物料 {unique_name} 的目标库位 {wh_name}[{idx}] 已被 "
+                                f"{getattr(occupant, 'name', occupant)} 占用，跳过放置"
+                            )
                     else:
                         logger.warning(f"❌ 物料 {unique_name} 的索引 {idx} 超出仓库 {wh_name} 容量 {warehouse.capacity}")
                 else:

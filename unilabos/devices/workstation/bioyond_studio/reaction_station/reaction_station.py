@@ -51,6 +51,8 @@ class BioyondReactionStation(BioyondWorkstation):
     继承自BioyondWorkstation,提供反应站特定的业务方法
     """
 
+    bioyond_is_source_of_truth = True
+
     def __init__(self, config: dict = None, deck=None, protocol_type=None, **kwargs):
         """初始化反应站
 
@@ -123,8 +125,6 @@ class BioyondReactionStation(BioyondWorkstation):
                             print(f"⚠️ 仓库 '{wh_name}' 在配置中没有 UUID")
                 else:
                     print(f"❌ 在 Deck 中未找到配置的仓库: '{wh_name}'")
-
-        super().__init__(bioyond_config=config, deck=deck)
 
         print(f"BioyondReactionStation初始化 - config包含workflow_mappings: {'workflow_mappings' in (config or {})}")
         if config and 'workflow_mappings' in config:
