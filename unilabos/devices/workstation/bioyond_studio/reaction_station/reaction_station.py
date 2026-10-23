@@ -8,6 +8,11 @@ import requests
 from pathlib import Path
 from datetime import datetime
 from unilabos.devices.workstation.bioyond_studio.station import BioyondWorkstation
+from unilabos.devices.workstation.bioyond_studio.reaction_station.paa_calculator import (
+    anhydride_supplement_formula,
+    compute_paa_feed,
+    nmp_supplement_formula,
+)
 from unilabos.registry.decorators import not_action
 from unilabos.devices.workstation.bioyond_studio.bioyond_rpc import MachineState
 from unilabos.ros.msgs.message_converter import convert_to_ros_msg, Float64, String
@@ -1762,6 +1767,159 @@ class BioyondReactionStation(BioyondWorkstation):
             print(f"   ❌ 工作流ID验证失败: {e}")
             print(f"   💡 将重新合并工作流")
             return False
+
+    # test3 固定配方（与 PAA 投料计算器默认值一致）
+    TEST3_AMINE_EQ = {"ODA": 0.7, "MPDA": 0.25, "SIDA": 0.05}
+    TEST3_ANHYDRIDE_AMINE_RATIO = 0.95
+    TEST3_SOLID_PERCENT = 19.0
+    TEST3_PGME_FRACTION_PERCENT = 15.0
+
+    def run_paa_test3(
+        self,
+        reactor_material: str,
+        oda_beaker: str,
+        mpda_beaker: str,
+        sida_vial: str,
+        btda_solid_vial: str,
+        titration_material: str,
+        nmp_vial: str,
+        pgme_solvent: str,
+        oda_solution_mass: float,
+        oda_solution_volume: float,
+        mpda_solution_mass: float,
+        mpda_solution_volume: float,
+        supplement_solid_mass: float,
+        supplement_volume: float,
+        btda_theory_mass: float = 8.379,
+        sida_temperature: float = -10.0,
+    ) -> str:
+        """test3 聚酰亚胺投料（固定流程）
+
+        内置 PAA 投料计算器，按固定配方（ODA/MPDA/SIDA 当量 0.7/0.25/0.05、酐胺比 0.95、固含量 19%、PGME 15%）
+        算出各步投料量，依次加入 反应器放入 → 烧杯×2 → SIDA → BTDA 固体 → 二酐补充液滴定 → NMP 补充液 → PGME → 反应器取出，
+        并下单执行。滴定与 NMP 补充液公式中的 BTDA 实际投入质量自动引用固体投料后的称重结果。
+
+        Args:
+            reactor_material[反应器物料]: 反应器放入的物料名称，如 BTDADD
+            oda_beaker[ODA溶液烧杯]: ODA 溶液烧杯的物料名称，如 ODA_NMP
+            mpda_beaker[MPDA溶液烧杯]: MPDA 溶液烧杯的物料名称，如 MPDA_NMP
+            sida_vial[SIDA小瓶]: SIDA 小瓶的物料名称，如 SIDA
+            btda_solid_vial[BTDA固体小瓶]: BTDA 固体小瓶的物料名称，如 BTDA3
+            titration_material[二酐补充液物料]: 二酐补充液（滴定）的物料名称，如 BTDADD
+            nmp_vial[NMP补充液小瓶]: NMP 补充液小瓶的物料名称，如 NMP2
+            pgme_solvent[PGME溶剂]: PGME 溶剂的物料名称，如 PGME
+            oda_solution_mass[ODA配液固体质量(g)]: ODA 溶液的配液固体质量(g)
+            oda_solution_volume[ODA配液定容体积(ml)]: ODA 溶液的配液定容体积(ml)
+            mpda_solution_mass[MPDA配液固体质量(g)]: MPDA 溶液的配液固体质量(g)
+            mpda_solution_volume[MPDA配液定容体积(ml)]: MPDA 溶液的配液定容体积(ml)
+            supplement_solid_mass[二酐补充液固体质量(g)]: BTDA 补充液的固体质量(g)
+            supplement_volume[二酐补充液定容体积(ml)]: BTDA 补充液的定容体积(ml)
+            btda_theory_mass[BTDA理论投料质量(g)]: BTDA 理论投料质量(g)，默认 8.379
+            sida_temperature[SIDA投料温度(℃)]: SIDA 投料步骤的温度(℃)，默认 -10
+
+        Returns:
+            JSON 字符串：计算结果、各步参数与任务创建结果
+        """
+        # 按当前库存刷新名称缓存并逐个确认：物料刚移除/刚放入（含板上小瓶）时缓存可能过期，
+        # 不先确认的话会带着已出库的 ID 去下单，Bioyond 才报"物料不存在库存"
+        self.hardware_interface.refresh_material_cache()
+        material_names = {
+            "反应器物料": reactor_material, "ODA溶液烧杯": oda_beaker, "MPDA溶液烧杯": mpda_beaker,
+            "SIDA小瓶": sida_vial, "BTDA固体小瓶": btda_solid_vial, "二酐补充液物料": titration_material,
+            "NMP补充液小瓶": nmp_vial, "PGME溶剂": pgme_solvent,
+        }
+        cache = self.hardware_interface.material_cache
+        duplicates = getattr(self.hardware_interface, "material_name_duplicates", {})
+        missing = [f"{label}「{name}」" for label, name in material_names.items() if name not in cache]
+        ambiguous = [f"{label}「{name}」({len(duplicates[name])} 个)" for label, name in material_names.items() if name in duplicates]
+        if missing or ambiguous:
+            problems = []
+            if missing:
+                problems.append(f"不在库存（未入库完成或名称有误）: {', '.join(missing)}")
+            if ambiguous:
+                problems.append(f"库存中有多个同名物料，无法确定使用哪一个: {', '.join(ambiguous)}")
+            raise ValueError("；".join(problems))
+
+        feed = compute_paa_feed(
+            anhydrides=[{"name": "BTDA", "theory_mass": float(btda_theory_mass)}],
+            amines=[
+                {"name": "ODA", "eq": self.TEST3_AMINE_EQ["ODA"],
+                 "solution_mass": float(oda_solution_mass), "solution_volume": float(oda_solution_volume)},
+                {"name": "MPDA", "eq": self.TEST3_AMINE_EQ["MPDA"],
+                 "solution_mass": float(mpda_solution_mass), "solution_volume": float(mpda_solution_volume)},
+                {"name": "SIDA", "eq": self.TEST3_AMINE_EQ["SIDA"]},
+            ],
+            anhydride_amine_ratio=self.TEST3_ANHYDRIDE_AMINE_RATIO,
+            solid_percent=self.TEST3_SOLID_PERCENT,
+            supplement_anhydride="BTDA",
+            supplement_solid_mass=float(supplement_solid_mass),
+            supplement_volume=float(supplement_volume),
+            pgme_fraction_percent=self.TEST3_PGME_FRACTION_PERCENT,
+        )
+        feed_vol = {a["name"]: a["feed_vol"] for a in feed["amines"]}
+        formulas: Dict[str, str] = {}
+
+        # 步骤顺序即 merge 后的子工作流顺序；公式里的 {{index-0-5}} 按这里的位置计算
+        steps = [
+            ("反应器放入", lambda: self.reactor_taken_in(
+                assign_material_name=reactor_material, cutoff="9999999", temperature=-10.0)),
+            ("ODA烧杯", lambda: self.liquid_feeding_beaker(
+                assign_material_name=oda_beaker, temperature=-10.0, titration_type="NO", torque_variation="NO",
+                time="0", volume=f"{feed_vol['ODA']:.3f}")),
+            ("MPDA烧杯", lambda: self.liquid_feeding_beaker(
+                assign_material_name=mpda_beaker, temperature=-10.0, titration_type="NO", torque_variation="NO",
+                time="0", volume=f"{feed_vol['MPDA']:.3f}")),
+            ("SIDA小瓶", lambda: self.liquid_feeding_vials_non_titration(
+                assign_material_name=sida_vial, volume_formula=f"{feed_vol['SIDA']:.3f}", temperature=float(sida_temperature),
+                titration_type="NO", torque_variation="NO", time="0")),
+            ("BTDA固体", lambda: self.solid_feeding_vials(
+                material_id="BTDA", assign_material_name=btda_solid_vial, temperature=-10.0, torque_variation="NO", time="0")),
+            ("二酐补充液", lambda: self.liquid_feeding_titration(
+                assign_material_name=titration_material, volume_formula=formulas["二酐补充液"], temperature=-10.0,
+                titration_type="NO", torque_variation="NO", time="0")),
+            ("NMP补充液", lambda: self.liquid_feeding_vials_non_titration(
+                assign_material_name=nmp_vial, volume_formula=formulas["NMP补充液"], temperature=-10.0,
+                titration_type="NO", torque_variation="YES", time="480")),
+            ("PGME", lambda: self.liquid_feeding_solvents(
+                assign_material_name=pgme_solvent, volume=f"{feed['pgme_vol']:.3f}", temperature=25.0,
+                titration_type="NO", torque_variation="YES", time="480")),
+            ("反应器取出", lambda: self.reactor_taken_out()),
+        ]
+        # BTDA 固体投料后的称重（m=0, n=5）即计算器中的 x
+        btda_ref = f"{{{{{[label for label, _ in steps].index('BTDA固体')}-0-5}}}}"
+        formulas["二酐补充液"] = anhydride_supplement_formula(feed, [btda_ref])
+        formulas["NMP补充液"] = nmp_supplement_formula(feed, [btda_ref])
+
+        # 清空残留序列，否则前面多出的步骤会让公式引用整体错位
+        self.clear_workflows()
+        self.pending_task_params = []
+        try:
+            for _, add_step in steps:
+                add_step()
+            if len(self._cached_workflow_sequence) != len(steps) or len(self.pending_task_params) != len(steps):
+                raise ValueError(
+                    f"工作流序列数量异常（序列 {len(self._cached_workflow_sequence)}、参数 {len(self.pending_task_params)}，"
+                    f"应为 {len(steps)}），公式引用会错位，已取消下单"
+                )
+        except Exception:
+            self.clear_workflows()
+            self.pending_task_params = []
+            raise
+
+        task_name = f"test3_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        result = self.process_and_execute_workflow(workflow_name="test3", task_name=task_name)
+        result_obj = json.loads(result) if isinstance(result, str) else result
+        return json.dumps({
+            "success": bool(result_obj.get("success")),
+            "task_name": task_name,
+            "feed_volumes_ml": {
+                "ODA": round(feed_vol["ODA"], 3), "MPDA": round(feed_vol["MPDA"], 3),
+                "SIDA": round(feed_vol["SIDA"], 3), "PGME": round(feed["pgme_vol"], 3),
+            },
+            "formulas": formulas,
+            "warnings": feed["warnings"],
+            "result": result_obj,
+        }, ensure_ascii=False)
 
     def process_and_execute_workflow(self, workflow_name: str, task_name: str) -> dict:
         """

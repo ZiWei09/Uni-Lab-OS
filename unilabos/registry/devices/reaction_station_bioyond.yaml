@@ -56,6 +56,125 @@ reaction_station.bioyond:
         handles: {}
         placeholder_keys: {}
         display_name: 添加时间约束
+      auto-run_paa_test3:
+        type: UniLabJsonCommand
+        goal: {}
+        feedback: {}
+        result: {}
+        schema:
+          title: run_paa_test3参数
+          description: test3 聚酰亚胺投料（固定流程）
+          type: object
+          properties:
+            goal:
+              type: object
+              properties:
+                reactor_material:
+                  type: string
+                  title: 反应器物料
+                  description: 反应器放入的物料名称，如 BTDADD
+                oda_beaker:
+                  type: string
+                  title: ODA溶液烧杯
+                  description: ODA 溶液烧杯的物料名称，如 ODA_NMP
+                mpda_beaker:
+                  type: string
+                  title: MPDA溶液烧杯
+                  description: MPDA 溶液烧杯的物料名称，如 MPDA_NMP
+                sida_vial:
+                  type: string
+                  title: SIDA小瓶
+                  description: SIDA 小瓶的物料名称，如 SIDA
+                btda_solid_vial:
+                  type: string
+                  title: BTDA固体小瓶
+                  description: BTDA 固体小瓶的物料名称，如 BTDA3
+                titration_material:
+                  type: string
+                  title: 二酐补充液物料
+                  description: 二酐补充液（滴定）的物料名称，如 BTDADD
+                nmp_vial:
+                  type: string
+                  title: NMP补充液小瓶
+                  description: NMP 补充液小瓶的物料名称，如 NMP2
+                pgme_solvent:
+                  type: string
+                  title: PGME溶剂
+                  description: PGME 溶剂的物料名称，如 PGME
+                oda_solution_mass:
+                  type: number
+                  title: ODA配液固体质量(g)
+                  description: ODA 溶液的配液固体质量(g)
+                oda_solution_volume:
+                  type: number
+                  title: ODA配液定容体积(ml)
+                  description: ODA 溶液的配液定容体积(ml)
+                mpda_solution_mass:
+                  type: number
+                  title: MPDA配液固体质量(g)
+                  description: MPDA 溶液的配液固体质量(g)
+                mpda_solution_volume:
+                  type: number
+                  title: MPDA配液定容体积(ml)
+                  description: MPDA 溶液的配液定容体积(ml)
+                supplement_solid_mass:
+                  type: number
+                  title: 二酐补充液固体质量(g)
+                  description: BTDA 补充液的固体质量(g)
+                supplement_volume:
+                  type: number
+                  title: 二酐补充液定容体积(ml)
+                  description: BTDA 补充液的定容体积(ml)
+                btda_theory_mass:
+                  type: number
+                  default: 8.379
+                  title: BTDA理论投料质量(g)
+                  description: BTDA 理论投料质量(g)，默认 8.379
+                sida_temperature:
+                  type: number
+                  default: -10.0
+                  title: SIDA投料温度(℃)
+                  description: SIDA 投料步骤的温度(℃)，默认 -10
+              required:
+              - reactor_material
+              - oda_beaker
+              - mpda_beaker
+              - sida_vial
+              - btda_solid_vial
+              - titration_material
+              - nmp_vial
+              - pgme_solvent
+              - oda_solution_mass
+              - oda_solution_volume
+              - mpda_solution_mass
+              - mpda_solution_volume
+              - supplement_solid_mass
+              - supplement_volume
+            feedback: {}
+            result:
+              type: string
+          required:
+          - goal
+        goal_default:
+          reactor_material: null
+          oda_beaker: null
+          mpda_beaker: null
+          sida_vial: null
+          btda_solid_vial: null
+          titration_material: null
+          nmp_vial: null
+          pgme_solvent: null
+          oda_solution_mass: null
+          oda_solution_volume: null
+          mpda_solution_mass: null
+          mpda_solution_volume: null
+          supplement_solid_mass: null
+          supplement_volume: null
+          btda_theory_mass: 8.379
+          sida_temperature: -10.0
+        handles: {}
+        placeholder_keys: {}
+        display_name: test3 聚酰亚胺投料
       auto-skip_titration_steps:
         type: UniLabJsonCommand
         goal: {}
