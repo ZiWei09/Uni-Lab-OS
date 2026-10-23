@@ -187,11 +187,51 @@ class BioyondResourceSynchronizer(ResourceSynchronizer):
                 deck=self.workstation.deck
             )
 
+            # 标记物料 ID 所属的 Bioyond 实例，跨站转运时据此识别外站 ID
+            for res in unilab_resources:
+                extra_info = getattr(res, "unilabos_extra", None) or {}
+                if extra_info.get("material_bioyond_id"):
+                    extra_info["material_bioyond_host"] = self.bioyond_api_client.host
+
             logger.info(f"从Bioyond同步了 {len(unilab_resources)} 个资源")
             return True
         except Exception as e:
             logger.error(f"从Bioyond同步物料数据失败: {e}")
             return False
+
+    def _exists_in_stock(self, material_id: str) -> bool:
+        """本站 Bioyond 在库物料中是否存在该 ID"""
+        for type_mode in (0, 1, 2):
+            materials = self.bioyond_api_client.stock_material(json.dumps({"typeMode": type_mode, "includeDetail": False}))
+            if any(m.get("id") == material_id for m in materials or []):
+                return True
+        return False
+
+    def release_foreign_bioyond_id(self, resource: Any) -> None:
+        """物料带着其它 Bioyond 实例（如配液站）的 ID 转运进来时，丢弃该 ID，交由本站重新创建"""
+        extra_info = getattr(resource, "unilabos_extra", None) or {}
+        material_bioyond_id = extra_info.get("material_bioyond_id")
+        if not material_bioyond_id:
+            return
+
+        own_host = self.bioyond_api_client.host
+        source_host = extra_info.get("material_bioyond_host")
+        if source_host == own_host:
+            return
+        if source_host is None and self._exists_in_stock(material_bioyond_id):
+            # 旧数据没有来源标记，但本站库存里查得到，视为本站物料
+            extra_info["material_bioyond_host"] = own_host
+            return
+
+        logger.info(
+            f"[跨站转运] 物料 {resource.name} 的 Bioyond ID {material_bioyond_id[:8]}... "
+            f"来自 {source_host or '未知实例'}，不属于本站 {own_host}，将在本站重新创建"
+        )
+        extra_info.pop("material_bioyond_id")
+        extra_info.pop("material_bioyond_host", None)
+        extra_info["source_bioyond_id"] = material_bioyond_id
+        extra_info["source_bioyond_host"] = source_host
+        setattr(resource, "unilabos_extra", extra_info)
 
     def _clear_warehouse_sites(self) -> int:
         """清空 deck 上所有堆栈的库位占用，返回被清掉的库位数"""
@@ -609,6 +649,7 @@ class BioyondResourceSynchronizer(ResourceSynchronizer):
 
             # 保存 Bioyond ID 到资源对象
             extra_info["material_bioyond_id"] = material_id
+            extra_info["material_bioyond_host"] = self.bioyond_api_client.host
             setattr(resource, "unilabos_extra", extra_info)
 
             return material_id
@@ -898,6 +939,9 @@ class BioyondWorkstation(WorkstationBase):
         logger.info(f"[resource_tree_add] 开始同步 {len(resources)} 个资源到 Bioyond 系统")
         for resource in resources:
             try:
+                # 外站 Bioyond 的 ID 不能用于本站入库（transfer 阶段通常已处理，这里兜底）
+                self.resource_synchronizer.release_foreign_bioyond_id(resource)
+
                 # 🔍 检查资源是否已有 Bioyond ID
                 extra_info = getattr(resource, "unilabos_extra", {})
                 material_bioyond_id = extra_info.get("material_bioyond_id")
@@ -1110,6 +1154,9 @@ class BioyondWorkstation(WorkstationBase):
         logger.info(f"  新父节点: {new_parent.name}")
 
         try:
+            # 从其它站转运来的物料带着对方 Bioyond 的 ID，先丢弃，才会在本站重新创建
+            self.resource_synchronizer.release_foreign_bioyond_id(resource)
+
             # ⭐ Transfer 阶段：只创建物料到 Bioyond 系统，不执行入库
             logger.info(f"[resource_tree_transfer] 开始创建物料 {resource.name} 到 Bioyond 系统（不入库）")
             result = self.resource_synchronizer._create_material_only(resource)

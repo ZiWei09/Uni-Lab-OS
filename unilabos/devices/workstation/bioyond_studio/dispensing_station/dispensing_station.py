@@ -1738,7 +1738,6 @@ class BioyondDispensingStation(BioyondWorkstation):
                 f"开始执行批量物料转移: {len(transfer_groups)}组任务 -> {target_device_id}"
             )
 
-            warehouse_mapping = self.bioyond_config.get("warehouse_mapping", {})
             results = []
             successful_count = 0
             failed_count = 0
@@ -1777,34 +1776,13 @@ class BioyondDispensingStation(BioyondWorkstation):
                             f"获取物料 {material_name} 失败: {str(e)}，请确认物料已正确加载到deck中"
                         )
 
-                    # 验证目标堆栈是否存在
-                    if target_stack not in WAREHOUSE_MAPPING:
-                        raise ValueError(
-                            f"未知的堆栈名称: {target_stack}，"
-                            f"可选值: {list(WAREHOUSE_MAPPING.keys())}"
-                        )
-
-                    # 验证库位是否有效
-                    stack_sites = WAREHOUSE_MAPPING[target_stack].get("site_uuids", {})
-                    if target_sites not in stack_sites:
-                        raise ValueError(
-                            f"库位 {target_sites} 不存在于堆栈 {target_stack} 中，"
-                            f"可选库位: {list(stack_sites.keys())}"
-                        )
-
-                    # 获取目标库位的UUID
-                    target_site_uuid = stack_sites[target_sites]
-                    if not target_site_uuid:
-                        raise ValueError(
-                            f"库位 {target_sites} 的 UUID 未配置，请在 WAREHOUSE_MAPPING 中完善"
-                        )
-
-                    # 目标位点（包含UUID）
+                    # 目标堆栈（堆栈与库位属于目标站，按目标站的资源树校验，不用本站的 warehouse_mapping）
+                    target_device_name = target_device_id.removeprefix("/devices/")
                     future = ROS2DeviceNode.run_async_func(
                         self._ros_node.get_resource_with_dir,
                         True,
                         **{
-                            "resource_id": f"/reaction_station_bioyond/Bioyond_Deck/{target_stack}",
+                            "resource_id": f"/{target_device_name}/Bioyond_Deck/{target_stack}",
                             "with_children": True,
                         },
                     )
@@ -1814,6 +1792,19 @@ class BioyondDispensingStation(BioyondWorkstation):
                     while not future.done():
                         time.sleep(0.1)
                     target_site_resource = future.result()
+
+                    # 验证库位是否有效
+                    stack_sites = list(getattr(target_site_resource, "_ordering", {}).keys())
+                    if target_sites not in stack_sites:
+                        raise ValueError(
+                            f"库位 {target_sites} 不存在于 {target_device_name} 的堆栈 {target_stack} 中，"
+                            f"可选库位: {stack_sites}"
+                        )
+
+                    # 目标站入库时按 update_resource_site 查库位 UUID，转运前写入
+                    extra_info = getattr(material_resource, "unilabos_extra", None) or {}
+                    extra_info["update_resource_site"] = target_sites
+                    material_resource.unilabos_extra = extra_info
 
                     # 调用父类的 transfer_resource_to_another 方法
                     # 传入ResourcePLR对象和目标位点资源
