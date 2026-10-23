@@ -122,8 +122,6 @@ class BioyondResourceSynchronizer(ResourceSynchronizer):
     def __init__(self, workstation: 'BioyondWorkstation'):
         super().__init__(workstation)
         self.bioyond_api_client = None
-        self.sync_interval = 60  # 默认60秒同步一次
-        self.last_sync_time = 0
         self.initialize()
 
     def initialize(self) -> bool:
@@ -133,9 +131,6 @@ class BioyondResourceSynchronizer(ResourceSynchronizer):
             if self.bioyond_api_client is None:
                 logger.error("Bioyond API客户端未初始化")
                 return False
-
-            # 设置同步间隔
-            self.sync_interval = self.workstation.bioyond_config.get("sync_interval", 600)
 
             logger.info("Bioyond资源同步器初始化完成")
             return True
@@ -1794,7 +1789,6 @@ def create_bioyond_workstation_example():
     bioyond_config = {
         "base_url": "http://bioyond.example.com/api",
         "api_key": "your_api_key_here",
-        "sync_interval": 60,  # 60秒同步一次
         "timeout": 30
     }
 
