@@ -1,6 +1,7 @@
 import pytest
 import json
 import os
+from pathlib import Path
 
 from unilabos.resources.graphio import resource_bioyond_to_plr
 from unilabos.resources.resource_tracker import ResourceTreeSet
@@ -9,6 +10,9 @@ from unilabos.registry.registry import lab_registry
 from unilabos.resources.bioyond.decks import BIOYOND_PolymerReactionStation_Deck
 
 lab_registry.setup()
+
+# 测试数据与本文件同目录，不依赖 pytest 的运行目录
+DATA_DIR = Path(__file__).parent
 
 
 type_mapping = {
@@ -26,7 +30,7 @@ type_mapping = {
 def bioyond_materials_reaction() -> list[dict]:
     print("加载 BioYond 物料数据...")
     print(os.getcwd())
-    with open("bioyond_materials_reaction.json", "r", encoding="utf-8") as f:
+    with open(DATA_DIR / "bioyond_materials_reaction.json", "r", encoding="utf-8") as f:
         data = json.load(f)
     print(f"加载了 {len(data)} 条物料数据")
     return data
@@ -36,7 +40,7 @@ def bioyond_materials_reaction() -> list[dict]:
 def bioyond_materials_liquidhandling_1() -> list[dict]:
     print("加载 BioYond 物料数据...")
     print(os.getcwd())
-    with open("bioyond_materials_liquidhandling_1.json", "r", encoding="utf-8") as f:
+    with open(DATA_DIR / "bioyond_materials_liquidhandling_1.json", "r", encoding="utf-8") as f:
         data = json.load(f)
     print(f"加载了 {len(data)} 条物料数据")
     return data
@@ -46,7 +50,7 @@ def bioyond_materials_liquidhandling_1() -> list[dict]:
 def bioyond_materials_liquidhandling_2() -> list[dict]:
     print("加载 BioYond 物料数据...")
     print(os.getcwd())
-    with open("bioyond_materials_liquidhandling_2.json", "r", encoding="utf-8") as f:
+    with open(DATA_DIR / "bioyond_materials_liquidhandling_2.json", "r", encoding="utf-8") as f:
         data = json.load(f)
     print(f"加载了 {len(data)} 条物料数据")
     return data
