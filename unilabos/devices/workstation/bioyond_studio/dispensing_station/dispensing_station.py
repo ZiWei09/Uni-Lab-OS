@@ -9,6 +9,7 @@ import pint
 
 from unilabos.devices.workstation.bioyond_studio.bioyond_rpc import BioyondException
 from unilabos.devices.workstation.bioyond_studio.station import BioyondWorkstation
+from unilabos.devices.workstation.bioyond_studio.report_parser import actuals_from_simplified_report, parse_channel_actuals
 from unilabos.registry.decorators import not_action
 from unilabos.ros.nodes.base_device_node import ROS2DeviceNode, BaseROS2DeviceNode
 import json
@@ -1288,35 +1289,8 @@ class BioyondDispensingStation(BioyondWorkstation):
             raise BioyondException(error_msg)
 
     def _extract_actuals_from_report(self, report) -> Dict[str, Any]:
-        data = report.get('data') if isinstance(report, dict) else None
-        actual_target_weigh = None
-        actual_volume = None
-        if data:
-            extra = data.get('extraProperties') or {}
-            if isinstance(extra, dict):
-                for v in extra.values():
-                    obj = None
-                    try:
-                        obj = json.loads(v) if isinstance(v, str) else v
-                    except Exception:
-                        obj = None
-                    if isinstance(obj, dict):
-                        tw = obj.get('targetWeigh')
-                        vol = obj.get('volume')
-                        if tw is not None:
-                            try:
-                                actual_target_weigh = float(tw)
-                            except Exception:
-                                pass
-                        if vol is not None:
-                            try:
-                                actual_volume = float(vol)
-                            except Exception:
-                                pass
-        return {
-            'actualTargetWeigh': actual_target_weigh,
-            'actualVolume': actual_volume
-        }
+        """取实际加料量：按步骤名区分 10%/90% 称量与加液体积（此前遍历取最后一个，小瓶订单会拿到 90% 的重量）"""
+        return actuals_from_simplified_report(report)
 
     def _simplify_report(self, report) -> Dict[str, Any]:
         """简化实验报告，只保留关键信息，去除冗余的工作流参数"""
@@ -1393,6 +1367,9 @@ class BioyondDispensingStation(BioyondWorkstation):
                     except:
                         simplified_extra[key] = value
                 simplified['extraProperties'] = simplified_extra
+
+        # 全部通量的实际值（按步骤名），简化前 workflowParameters 还在，才能把步骤 ID 换成步骤名
+        simplified['channels'] = parse_channel_actuals(data)
 
         return {
             'data': simplified,

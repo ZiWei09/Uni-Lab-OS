@@ -8,6 +8,7 @@ import requests
 from pathlib import Path
 from datetime import datetime
 from unilabos.devices.workstation.bioyond_studio.station import BioyondWorkstation
+from unilabos.devices.workstation.bioyond_studio.report_parser import actuals_from_simplified_report
 from unilabos.devices.workstation.bioyond_studio.reaction_station.paa_calculator import (
     anhydride_supplement_formula,
     compute_paa_feed,
@@ -810,35 +811,8 @@ class BioyondReactionStation(BioyondWorkstation):
         return json.dumps({"suc": True})
 
     def _extract_actuals_from_report(self, report) -> Dict[str, Any]:
-        data = report.get('data') if isinstance(report, dict) else None
-        actual_target_weigh = None
-        actual_volume = None
-        if data:
-            extra = data.get('extraProperties') or {}
-            if isinstance(extra, dict):
-                for v in extra.values():
-                    obj = None
-                    try:
-                        obj = json.loads(v) if isinstance(v, str) else v
-                    except Exception:
-                        obj = None
-                    if isinstance(obj, dict):
-                        tw = obj.get('targetWeigh')
-                        vol = obj.get('volume')
-                        if tw is not None:
-                            try:
-                                actual_target_weigh = float(tw)
-                            except Exception:
-                                pass
-                        if vol is not None:
-                            try:
-                                actual_volume = float(vol)
-                            except Exception:
-                                pass
-        return {
-            'actualTargetWeigh': actual_target_weigh,
-            'actualVolume': actual_volume
-        }
+        """从配液站简化报告取实际加料量（与配液站同一套解析：按步骤名区分 10%/90% 称量）"""
+        return actuals_from_simplified_report(report)
 
     def extract_actuals_from_batch_reports(self, batch_reports_result: str) -> dict:
         print(f"[DEBUG] extract_actuals 收到原始数据: {batch_reports_result[:500]}...")  # 打印前500字符
