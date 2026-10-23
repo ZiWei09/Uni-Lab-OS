@@ -1578,15 +1578,22 @@ class BioyondDispensingStation(BioyondWorkstation):
                                 # 简化报告，去除冗余信息
                                 report = self._simplify_report(report)
 
-                            reports.append({
+                            # 只有成功结束的订单才提取实际加料量；失败的保留报告便于排查，但下游不能拿去算量
+                            succeeded = str(completion_info.get('status')) in self.ORDER_SUCCESS_STATUS
+                            entry = {
                                 "order_code": order_code,
                                 "order_id": order_id,
-                                "status": "completed",
+                                "status": "completed" if succeeded else "error",
                                 "completion_status": completion_info.get('status'),
                                 "report": report,
-                                "extracted": self._extract_actuals_from_report(report),
+                                "extracted": self._extract_actuals_from_report(report) if succeeded else None,
                                 "elapsed_time": elapsed_time
-                            })
+                            }
+                            if not succeeded:
+                                status_name = completion_info.get('status_name') or completion_info.get('status')
+                                entry["error"] = f"任务未成功结束（状态 {status_name}）"
+                                self.hardware_interface._logger.error(f"任务 {order_code} 未成功结束，状态: {status_name}")
+                            reports.append(entry)
 
                             # 标记为已完成
                             completed_in_this_round.append(order_code)
@@ -1717,7 +1724,7 @@ class BioyondDispensingStation(BioyondWorkstation):
         for order_id, item in finished.items():
             order_code = missing[order_id]
             self.order_completion_status[order_code] = {
-                'status': item.get('status'),
+                'status': str(item.get('status')),
                 'status_name': item.get('statusName'),
                 'order_name': item.get('name'),
                 'timestamp': datetime.now().isoformat(),

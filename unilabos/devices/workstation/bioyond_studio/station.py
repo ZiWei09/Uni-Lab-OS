@@ -963,6 +963,8 @@ class BioyondWorkstation(WorkstationBase):
 
     # order-list 里订单结束时的状态（实测 80=Success、90=Failed），与报送回调的状态码（30/-11/-12）不是同一套
     ORDER_LIST_FINISHED_STATUS = (80, 90)
+    # 订单成功结束：报送回调 30=完成，order-list 80=Success
+    ORDER_SUCCESS_STATUS = ("30", "80")
 
     def poll_finished_orders(self, order_ids: List[str]) -> Dict[str, Dict[str, Any]]:
         """主动查询任务列表，返回其中已结束的订单 {order_id: 订单信息}，作为报送回调丢失时的兜底"""

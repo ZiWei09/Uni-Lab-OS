@@ -822,89 +822,6 @@ class BioyondReactionStation(BioyondWorkstation):
             'actualVolume': actual_volume
         }
 
-    def _simplify_report(self, report) -> Dict[str, Any]:
-        """简化实验报告,只保留关键信息,去除冗余的工作流参数"""
-        if not isinstance(report, dict):
-            return report
-
-        data = report.get('data', {})
-        if not isinstance(data, dict):
-            return report
-
-        # 提取关键信息
-        simplified = {
-            'name': data.get('name'),
-            'code': data.get('code'),
-            'requester': data.get('requester'),
-            'workflowName': data.get('workflowName'),
-            'workflowStep': data.get('workflowStep'),
-            'requestTime': data.get('requestTime'),
-            'startPreparationTime': data.get('startPreparationTime'),
-            'completeTime': data.get('completeTime'),
-            'useTime': data.get('useTime'),
-            'status': data.get('status'),
-            'statusName': data.get('statusName'),
-        }
-
-        # 提取物料信息(简化版)
-        pre_intakes = data.get('preIntakes', [])
-        if pre_intakes and isinstance(pre_intakes, list):
-            first_intake = pre_intakes[0]
-            sample_materials = first_intake.get('sampleMaterials', [])
-
-            # 简化物料信息
-            simplified_materials = []
-            for material in sample_materials:
-                if isinstance(material, dict):
-                    mat_info = {
-                        'materialName': material.get('materialName'),
-                        'materialTypeName': material.get('materialTypeName'),
-                        'materialCode': material.get('materialCode'),
-                        'materialLocation': material.get('materialLocation'),
-                    }
-
-                    # 解析parameters中的关键信息
-                    params_str = material.get('parameters', '{}')
-                    try:
-                        params = json.loads(params_str) if isinstance(params_str, str) else params_str
-                        if isinstance(params, dict):
-                            # 只保留关键参数
-                            if 'density' in params:
-                                mat_info['density'] = params['density']
-                            if 'feedingHistory' in params:
-                                mat_info['feedingHistory'] = params['feedingHistory']
-                            if 'liquidVolume' in params:
-                                mat_info['liquidVolume'] = params['liquidVolume']
-                            if 'm_diamine_tot' in params:
-                                mat_info['m_diamine_tot'] = params['m_diamine_tot']
-                            if 'wt_diamine' in params:
-                                mat_info['wt_diamine'] = params['wt_diamine']
-                    except:
-                        pass
-
-                    simplified_materials.append(mat_info)
-
-            simplified['sampleMaterials'] = simplified_materials
-
-            # 提取extraProperties中的实际值
-            extra_props = first_intake.get('extraProperties', {})
-            if isinstance(extra_props, dict):
-                simplified_extra = {}
-                for key, value in extra_props.items():
-                    try:
-                        parsed_value = json.loads(value) if isinstance(value, str) else value
-                        simplified_extra[key] = parsed_value
-                    except:
-                        simplified_extra[key] = value
-                simplified['extraProperties'] = simplified_extra
-
-        return {
-            'data': simplified,
-            'code': report.get('code'),
-            'message': report.get('message'),
-            'timestamp': report.get('timestamp')
-        }
-
     def extract_actuals_from_batch_reports(self, batch_reports_result: str) -> dict:
         print(f"[DEBUG] extract_actuals 收到原始数据: {batch_reports_result[:500]}...")  # 打印前500字符
         try:
@@ -917,6 +834,15 @@ class BioyondReactionStation(BioyondWorkstation):
         except Exception as e:
             print(f"[DEBUG] 解析异常: {e}")
             reports = []
+
+        # 配液任务失败 / 超时时称量值不可信，不能拿去算滴定量，直接中止
+        unfinished = [
+            f"{r.get('order_code')}({r.get('status')}: {r.get('error') or r.get('completion_status')})"
+            for r in reports
+            if r.get("status", "completed") != "completed"
+        ]
+        if unfinished:
+            raise ValueError(f"以下配液任务未成功完成，无法提取实际加料量: {', '.join(unfinished)}")
 
         actuals = []
         for i, r in enumerate(reports):
@@ -1053,158 +979,6 @@ class BioyondReactionStation(BioyondWorkstation):
             return {"processed": True, "frame": data.get("frameCode")}
         except Exception as e:
             return {"processed": False, "error": str(e)}
-
-    @not_action
-    def wait_for_multiple_orders_and_get_reports(self, batch_create_result: str = None, timeout: int = 7200, check_interval: int = 10) -> Dict[str, Any]:
-        try:
-            timeout = int(timeout) if timeout else 7200
-            check_interval = int(check_interval) if check_interval else 10
-            if not batch_create_result or batch_create_result == "":
-                raise ValueError(
-                    "batch_create_result参数为空,请确保:\n"
-                    "1. batch_create节点与wait节点之间正确连接了handle\n"
-                    "2. batch_create节点成功执行并返回了结果\n"
-                    "3. 检查上游batch_create任务是否成功创建了订单"
-                )
-            try:
-                if isinstance(batch_create_result, str) and '[...]' in batch_create_result:
-                    batch_create_result = batch_create_result.replace('[...]', '[]')
-                result_obj = json.loads(batch_create_result) if isinstance(batch_create_result, str) else batch_create_result
-                if isinstance(result_obj, dict) and "return_value" in result_obj:
-                    inner = result_obj.get("return_value")
-                    if isinstance(inner, str):
-                        result_obj = json.loads(inner)
-                    elif isinstance(inner, dict):
-                        result_obj = inner
-                order_codes = result_obj.get("order_codes", [])
-                order_ids = result_obj.get("order_ids", [])
-            except Exception as e:
-                raise ValueError(f"解析batch_create_result失败: {e}")
-            if not order_codes or not order_ids:
-                raise ValueError(
-                    "batch_create_result中未找到order_codes或order_ids,或者为空。\n"
-                    "可能的原因:\n"
-                    "1. batch_create任务执行失败(检查任务是否报错)\n"
-                    "2. 物料配置问题(如'物料样品板分配失败')\n"
-                    "3. Bioyond系统状态异常\n"
-                    f"batch_create_result内容: {batch_create_result[:200]}..."
-                )
-            if not isinstance(order_codes, list):
-                order_codes = [order_codes]
-            if not isinstance(order_ids, list):
-                order_ids = [order_ids]
-            if len(order_codes) != len(order_ids):
-                raise ValueError("order_codes与order_ids数量不匹配")
-            total = len(order_codes)
-            pending = {c: {"order_id": order_ids[i], "completed": False} for i, c in enumerate(order_codes)}
-
-            # 发布初始状态事件
-            for i, oc in enumerate(order_codes):
-                self._publish_task_status(
-                    task_id=order_ids[i],
-                    task_code=oc,
-                    task_type="bioyond_workflow",
-                    status="running",
-                    progress=0.0
-                )
-
-            reports = []
-            start_time = time.time()
-            while pending:
-                elapsed_time = time.time() - start_time
-                if elapsed_time > timeout:
-                    for oc in list(pending.keys()):
-                        reports.append({
-                            "order_code": oc,
-                            "order_id": pending[oc]["order_id"],
-                            "status": "timeout",
-                            "completion_status": None,
-                            "report": None,
-                            "extracted": None,
-                            "elapsed_time": elapsed_time
-                        })
-                        # 发布超时事件
-                        self._publish_task_status(
-                            task_id=pending[oc]["order_id"],
-                            task_code=oc,
-                            task_type="bioyond_workflow",
-                            status="timeout",
-                            result={"elapsed_time": elapsed_time}
-                        )
-                    break
-                completed_round = []
-                for oc in list(pending.keys()):
-                    oid = pending[oc]["order_id"]
-                    if oc in self.order_completion_status:
-                        info = self.order_completion_status[oc]
-                        try:
-                            rep = self.hardware_interface.order_report(oid)
-                            if not rep:
-                                rep = {"error": "无法获取报告"}
-                            else:
-                                # 简化报告,去除冗余信息
-                                rep = self._simplify_report(rep)
-                            reports.append({
-                                "order_code": oc,
-                                "order_id": oid,
-                                "status": "completed",
-                                "completion_status": info.get('status'),
-                                "report": rep,
-                                "extracted": self._extract_actuals_from_report(rep),
-                                "elapsed_time": elapsed_time
-                            })
-                            # 发布完成事件
-                            self._publish_task_status(
-                                task_id=oid,
-                                task_code=oc,
-                                task_type="bioyond_workflow",
-                                status="completed",
-                                progress=1.0,
-                                result=rep
-                            )
-                            completed_round.append(oc)
-                            del self.order_completion_status[oc]
-                        except Exception as e:
-                            reports.append({
-                                "order_code": oc,
-                                "order_id": oid,
-                                "status": "error",
-                                "completion_status": info.get('status') if 'info' in locals() else None,
-                                "report": None,
-                                "extracted": None,
-                                "error": str(e),
-                                "elapsed_time": elapsed_time
-                            })
-                            # 发布错误事件
-                            self._publish_task_status(
-                                task_id=oid,
-                                task_code=oc,
-                                task_type="bioyond_workflow",
-                                status="error",
-                                result={"error": str(e)}
-                            )
-                            completed_round.append(oc)
-                for oc in completed_round:
-                    del pending[oc]
-                if pending:
-                    time.sleep(check_interval)
-            completed_count = sum(1 for r in reports if r['status'] == 'completed')
-            timeout_count = sum(1 for r in reports if r['status'] == 'timeout')
-            error_count = sum(1 for r in reports if r['status'] == 'error')
-            final_elapsed_time = time.time() - start_time
-            summary = {
-                "total": total,
-                "completed": completed_count,
-                "timeout": timeout_count,
-                "error": error_count,
-                "elapsed_time": round(final_elapsed_time, 2),
-                "reports": reports
-            }
-            return {
-                "return_info": json.dumps(summary, ensure_ascii=False)
-            }
-        except Exception as e:
-            raise
 
     def liquid_feeding_beaker(
         self,
