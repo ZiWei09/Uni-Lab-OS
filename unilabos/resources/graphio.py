@@ -814,9 +814,10 @@ def resource_bioyond_to_plr(bioyond_materials: list[dict], type_mapping: Dict[st
                             (detail["name"], float(detail.get("quantity", 0)) if detail.get("quantity") else 0)
                         ]
                     bottle.code = detail.get("code", "")
-                    # 子物料有自己的 Bioyond ID 就用它，否则用 父物料ID + 槽位 推导
-                    if detail.get("id"):
-                        bottle.unilabos_uuid = bioyond_stable_uuid(detail["id"])
+                    # 子物料优先用 detailMaterialId（物料本身的 ID，detail.id 是明细行 ID），否则用 父物料ID + 槽位 推导
+                    detail_material_id = detail.get("detailMaterialId") or detail.get("id")
+                    if detail_material_id:
+                        bottle.unilabos_uuid = bioyond_stable_uuid(detail_material_id)
                     elif material.get("id"):
                         bottle.unilabos_uuid = bioyond_stable_uuid(material["id"], "slot", number)
                     logger.debug(f"  └─ [子物料] {detail['name']} → {plr_material.name}[{number}] (类型:{typeName})")
