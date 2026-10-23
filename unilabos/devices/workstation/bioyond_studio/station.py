@@ -961,6 +961,26 @@ class BioyondWorkstation(WorkstationBase):
             logger.info(f"✅ {len(self._synced_resources)} 个从Bioyond同步的物料已包含在 deck 中")
             self._synced_resources = []
 
+    # order-list 里订单结束时的状态（实测 80=Success、90=Failed），与报送回调的状态码（30/-11/-12）不是同一套
+    ORDER_LIST_FINISHED_STATUS = (80, 90)
+
+    def poll_finished_orders(self, order_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        """主动查询任务列表，返回其中已结束的订单 {order_id: 订单信息}，作为报送回调丢失时的兜底"""
+        wanted = set(order_ids)
+        if not wanted:
+            return {}
+        # 列表按创建时间倒序，待查的订单都是刚创建的，取最新一页即可
+        data = self.hardware_interface.order_query(json.dumps({
+            "timeType": "", "beginTime": "", "endTime": "", "status": "", "filter": "",
+            "skipCount": 0, "pageCount": max(50, len(wanted) * 5), "sorting": "",
+        }))
+        items = data.get("items", []) if isinstance(data, dict) else []
+        return {
+            item["id"]: item
+            for item in items
+            if item.get("id") in wanted and item.get("status") in self.ORDER_LIST_FINISHED_STATUS
+        }
+
     def _sync_from_bioyond_and_report(self, reason: str) -> bool:
         """运行中从 Bioyond 重新同步物料，并把最新 deck 上报云端，前端才会刷新"""
         with self._sync_lock:

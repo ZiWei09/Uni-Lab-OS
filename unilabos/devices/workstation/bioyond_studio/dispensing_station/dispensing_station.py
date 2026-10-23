@@ -1547,6 +1547,9 @@ class BioyondDispensingStation(BioyondWorkstation):
 
                     break
 
+                # 报送回调可能丢失（回调地址不可达、服务未起），主动查询任务列表兜底
+                self._fill_completion_status_by_polling(pending_orders)
+
                 # 检查每个待完成的任务
                 completed_in_this_round = []
                 for order_code in list(pending_orders.keys()):
@@ -1695,6 +1698,37 @@ class BioyondDispensingStation(BioyondWorkstation):
         except Exception as e:
             self.hardware_interface._logger.error(f"处理任务完成报送失败: {e}")
             return {"processed": False, "error": str(e)}
+
+    def _fill_completion_status_by_polling(self, pending_orders: Dict[str, Dict[str, Any]]) -> None:
+        """对还没收到完成报送的订单主动查询，已结束的写入 order_completion_status 并同步物料"""
+        missing = {
+            info["order_id"]: order_code
+            for order_code, info in pending_orders.items()
+            if order_code not in self.order_completion_status
+        }
+        if not missing:
+            return
+        try:
+            finished = self.poll_finished_orders(list(missing))
+        except Exception as e:
+            self.hardware_interface._logger.warning(f"主动查询任务状态失败，继续等待报送: {e}")
+            return
+
+        for order_id, item in finished.items():
+            order_code = missing[order_id]
+            self.order_completion_status[order_code] = {
+                'status': item.get('status'),
+                'status_name': item.get('statusName'),
+                'order_name': item.get('name'),
+                'timestamp': datetime.now().isoformat(),
+                'source': 'order_list_poll',
+            }
+            self.hardware_interface._logger.warning(
+                f"未收到任务 {order_code} 的完成报送，主动查询到已结束: {item.get('statusName')}({item.get('status')})"
+            )
+        if finished:
+            # 报送回调才会触发的物料同步，这里补上
+            self._sync_from_bioyond_and_report("任务结束(主动查询)")
 
     def transfer_materials_to_reaction_station(
         self,
