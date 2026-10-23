@@ -59,6 +59,8 @@ class BioyondV1RPC(BaseRequest):
                 self.location_mapping.update(warehouse_config["site_uuids"])
         self._logger = SimpleLogger()
         self.material_cache = {}
+        # 库存中对应多个物料的名称 {名称: [ID, ...]}，按名称查 ID 时无法确定是哪一个
+        self.material_name_duplicates: Dict[str, List[str]] = {}
         self._load_material_cache()
 
     # ==================== 基础通用方法 ====================
@@ -316,13 +318,16 @@ class BioyondV1RPC(BaseRequest):
             return {}
 
         # 自动更新缓存 - 移除被删除的物料
+        self._forget_material(material_id)
+
+        return response.get("data", {})
+
+    def _forget_material(self, material_id: str) -> None:
+        """物料删除或出库后，移除缓存中指向它的名称，避免之后按名称拿到已不在库存的 ID"""
         for name, mid in list(self.material_cache.items()):
             if mid == material_id:
                 del self.material_cache[name]
                 print(f"已从缓存移除物料: {name}")
-                break
-
-        return response.get("data", {})
 
     def material_outbound(self, material_id: str, location_name: str, quantity: int) -> dict:
         """指定库位出库物料（通过库位名称）"""
@@ -344,6 +349,7 @@ class BioyondV1RPC(BaseRequest):
 
         if not response or response['code'] != 1:
             return None
+        self._forget_material(material_id)
         return response
 
     def material_outbound_by_id(self, material_id: str, location_id: str, quantity: int) -> dict:
@@ -373,6 +379,7 @@ class BioyondV1RPC(BaseRequest):
 
         if not response or response['code'] != 1:
             return None
+        self._forget_material(material_id)
         return response
 
     def batch_outbound(self, outbound_items: List[Dict[str, Any]]) -> int:
@@ -1126,6 +1133,8 @@ class BioyondV1RPC(BaseRequest):
         """预加载材料列表到缓存中"""
         try:
             print("正在加载材料列表缓存...")
+            # 按当前库存整体重建：不在库存里的名称随之清掉，同名多物料单独记录
+            name_to_ids: Dict[str, List[str]] = {}
 
             # 加载所有类型的材料：耗材(0)、样品(1)、试剂(2)
             material_types = [0, 1, 2]
@@ -1145,7 +1154,7 @@ class BioyondV1RPC(BaseRequest):
                     material_name = material.get("name")
                     material_id = material.get("id")
                     if material_name and material_id:
-                        self.material_cache[material_name] = material_id
+                        name_to_ids.setdefault(material_name, []).append(material_id)
 
                     # 处理样品板等容器中的detail材料
                     detail_materials = material.get("detail", [])
@@ -1157,14 +1166,21 @@ class BioyondV1RPC(BaseRequest):
                             detail_id = detail_material.get("id")
 
                         if detail_name and detail_id:
-                            self.material_cache[detail_name] = detail_id
-                            print(f"加载detail材料: {detail_name} -> ID: {detail_id}")
+                            name_to_ids.setdefault(detail_name, []).append(detail_id)
 
-            print(f"材料列表缓存加载完成，共加载 {len(self.material_cache)} 个材料")
+            # stock_material 请求失败时返回空列表而不抛异常，全空时保留原缓存，避免一次网络抖动清空缓存
+            if not name_to_ids:
+                print("材料列表查询结果为空，保留原缓存")
+                return
+
+            # 同名多物料时仍保留最后一个（与原行为一致），但记录下来供调用方判断
+            self.material_cache = {name: ids[-1] for name, ids in name_to_ids.items()}
+            self.material_name_duplicates = {name: ids for name, ids in name_to_ids.items() if len(set(ids)) > 1}
+            print(f"材料列表缓存加载完成，共加载 {len(self.material_cache)} 个材料，同名多物料 {len(self.material_name_duplicates)} 个")
 
         except Exception as e:
-            print(f"加载材料列表缓存时出错: {e}")
-            self.material_cache = {}
+            # 查询失败时保留原缓存，不清空
+            print(f"加载材料列表缓存时出错，保留原缓存: {e}")
 
     def _get_material_id_by_name(self, material_name_or_id: str) -> str:
         """根据材料名称获取材料ID"""
