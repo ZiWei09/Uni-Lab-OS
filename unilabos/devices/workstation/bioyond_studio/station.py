@@ -261,6 +261,28 @@ class BioyondResourceSynchronizer(ResourceSynchronizer):
         extra_info["source_bioyond_owner"] = source_owner
         setattr(resource, "unilabos_extra", extra_info)
 
+    def match_bioyond_id_by_name(self, resource: Any, materials: List[Dict[str, Any]]) -> Optional[str]:
+        """没有 Bioyond ID 时按名称找本站物料
+
+        外站转运来的物料不可能在本站 Bioyond 里，同名也不匹配；名称不唯一时无法确定对应哪一个，也不匹配，
+        避免绑错物料或出库错物料
+        """
+        extra_info = getattr(resource, "unilabos_extra", None) or {}
+        if extra_info.get("source_bioyond_id"):
+            logger.warning(
+                f"[按名称匹配] 物料 {resource.name} 来自 {extra_info.get('source_bioyond_owner') or '外站'}，不按名称匹配本站物料"
+            )
+            return None
+
+        names = {resource.name, extra_info.get("material_bioyond_name")} - {None, ""}
+        candidates = [m for m in materials if m.get("name") in names]
+        if len(candidates) > 1:
+            logger.warning(
+                f"[按名称匹配] 名称 {sorted(names)} 在 Bioyond 中有 {len(candidates)} 个同名物料，无法确定对应哪一个，不按名称匹配"
+            )
+            return None
+        return candidates[0].get("id") if candidates else None
+
     def _clear_warehouse_sites(self) -> int:
         """清空 deck 上所有堆栈的库位占用，返回被清掉的库位数"""
         cleared = 0
@@ -318,15 +340,13 @@ class BioyondResourceSynchronizer(ResourceSynchronizer):
             # ⭐ 如果没有 Bioyond ID，尝试从查询结果中按名称匹配
             if not material_bioyond_id:
                 logger.warning(f"[同步→Bioyond] 物料 {resource.name} 没有 Bioyond ID，尝试按名称查询...")
-                for mat in existing_materials:
-                    if mat.get("name") == resource.name:
-                        material_bioyond_id = mat.get("id")
-                        mat_type = mat.get("typeName", "未知")
-                        logger.info(f"✅ 找到物料 {resource.name} ({mat_type}) 的 Bioyond ID: {material_bioyond_id[:8]}...")
-                        # 保存 ID 到资源对象
-                        extra_info["material_bioyond_id"] = material_bioyond_id
-                        setattr(resource, "unilabos_extra", extra_info)
-                        break
+                material_bioyond_id = self.match_bioyond_id_by_name(resource, existing_materials)
+                if material_bioyond_id:
+                    logger.info(f"✅ 找到物料 {resource.name} 的 Bioyond ID: {material_bioyond_id[:8]}...")
+                    # 保存 ID 到资源对象
+                    extra_info["material_bioyond_id"] = material_bioyond_id
+                    setattr(resource, "unilabos_extra", extra_info)
+                    self.tag_bioyond_owner([resource])
 
                 if not material_bioyond_id:
                     logger.warning(f"⚠️ 在 Bioyond 系统中未找到名为 {resource.name} 的物料")
@@ -857,6 +877,8 @@ class BioyondWorkstation(WorkstationBase):
         # 创建通信模块
         self._create_communication_module(bioyond_config)
         self.resource_synchronizer = BioyondResourceSynchronizer(self)
+        # 报送回调线程与动作线程都可能触发同步，同一时间只跑一个
+        self._sync_lock = threading.Lock()
         self.resource_synchronizer.sync_from_external()
 
         # TODO: self._ros_node里面拿属性
@@ -938,6 +960,19 @@ class BioyondWorkstation(WorkstationBase):
         if hasattr(self, "_synced_resources"):
             logger.info(f"✅ {len(self._synced_resources)} 个从Bioyond同步的物料已包含在 deck 中")
             self._synced_resources = []
+
+    def _sync_from_bioyond_and_report(self, reason: str) -> bool:
+        """运行中从 Bioyond 重新同步物料，并把最新 deck 上报云端，前端才会刷新"""
+        with self._sync_lock:
+            ok = self.resource_synchronizer.sync_from_external()
+        if not ok:
+            logger.warning(f"[{reason}] 从 Bioyond 同步物料失败，未上报云端")
+            return False
+        if getattr(self, "_ros_node", None) is None:
+            return True
+        ROS2DeviceNode.run_async_func(self._ros_node.update_resource, True, **{"resources": [self.deck]})
+        logger.info(f"[{reason}] 物料已从 Bioyond 同步并上报云端")
+        return True
 
     def transfer_resource_to_another(self, resource: List[ResourceSlot], mount_resource: List[ResourceSlot], sites: List[str], mount_device_id: DeviceSlot):
         future = ROS2DeviceNode.run_async_func(self._ros_node.transfer_resource_to_another, True, **{
@@ -1093,17 +1128,12 @@ class BioyondWorkstation(WorkstationBase):
                     if materials:
                         all_materials.extend(materials)
 
-                # 精确匹配物料名称
-                matched_material = None
-                for mat in all_materials:
-                    if mat.get("name") == query_name:
-                        matched_material = mat
-                        material_bioyond_id = mat.get("id")
-                        logger.info(f"✅ [resource_tree_remove] 找到物料 {query_name} 的 Bioyond ID: {material_bioyond_id[:8]}...")
-                        break
-
-                if not matched_material:
-                    logger.warning(f"⚠️ [resource_tree_remove] Bioyond 系统中未找到物料: {query_name}")
+                # 精确匹配物料名称（外站物料、同名不唯一时不匹配，避免出库错物料）
+                material_bioyond_id = self.resource_synchronizer.match_bioyond_id_by_name(resource, all_materials)
+                if material_bioyond_id:
+                    logger.info(f"✅ [resource_tree_remove] 找到物料 {query_name} 的 Bioyond ID: {material_bioyond_id[:8]}...")
+                else:
+                    logger.warning(f"⚠️ [resource_tree_remove] Bioyond 系统中未找到唯一对应的物料: {query_name}")
                     logger.info(f"[resource_tree_remove] 该物料可能尚未入库或已被删除，跳过出库操作")
                     return True
 
@@ -1447,7 +1477,7 @@ class BioyondWorkstation(WorkstationBase):
 
             # 重新同步资源
             if self.resource_synchronizer:
-                self.resource_synchronizer.sync_from_external()
+                self._sync_from_bioyond_and_report("工作站重置")
 
             logger.info("工作站重置完成")
             return {
@@ -1499,7 +1529,7 @@ class BioyondWorkstation(WorkstationBase):
             # 更新物料信息
             # 步骤完成后，物料状态可能发生变化（如位置、用量等），触发同步
             logger.info(f"[步骤完成报送] 触发物料同步...")
-            self.resource_synchronizer.sync_from_external()
+            self._sync_from_bioyond_and_report("步骤完成报送")
 
 
             return {
@@ -1606,10 +1636,10 @@ class BioyondWorkstation(WorkstationBase):
             )
 
             # 更新物料信息
-            # 任务完成后，且状态为完成时，触发同步以更新最终物料状态
-            if event_status == "completed":
+            # 任务结束（完成 / 异常停止 / 人工停止）时物料都可能已变化，触发同步以更新最终物料状态
+            if event_status in ("completed", "error"):
                 logger.info(f"[任务完成报送] 触发物料同步...")
-                self.resource_synchronizer.sync_from_external()
+                self._sync_from_bioyond_and_report("任务完成报送")
 
 
             return {
