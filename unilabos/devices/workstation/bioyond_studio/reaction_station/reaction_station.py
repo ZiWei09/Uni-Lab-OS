@@ -1,4 +1,5 @@
 import json
+import threading
 import time
 import requests
 from typing import List, Dict, Any, Literal
@@ -158,6 +159,18 @@ class BioyondReactionStation(BioyondWorkstation):
 
         # 动态获取工作流步骤ID
         self.workflow_step_ids = self._fetch_workflow_step_ids()
+
+    def post_init(self, ros_node):
+        super().post_init(ros_node)
+        # merge 出来的历史工作流堆积会拖慢 Bioyond 排程初始化，启动时后台清理，不阻塞启动
+        if self.bioyond_config.get("cleanup_merged_workflows_on_startup", True):
+            threading.Thread(target=self._cleanup_merged_workflows_on_startup, daemon=True,
+                             name="BioyondWorkflowCleanup").start()
+
+    def _cleanup_merged_workflows_on_startup(self) -> None:
+        result = self.clean_all_server_workflows()
+        log = self.hardware_interface._logger.info if result.get("code") == 1 else self.hardware_interface._logger.warning
+        log(f"[启动清理] {result.get('message')}")
 
     def _fetch_workflow_step_ids(self) -> Dict[str, Dict[str, str]]:
         """动态获取工作流步骤ID"""
@@ -1303,62 +1316,75 @@ class BioyondReactionStation(BioyondWorkstation):
     @not_action
     def clean_all_server_workflows(self) -> Dict[str, Any]:
         """
-        清空服务端所有非核心工作流
-        逻辑：
-        1. 利用 3.2 接口查询所有工作流 (includeDetail=False)
-        2. 提取所有 ID
-        3. 利用 3.38 接口 (hard_delete_merged_workflows) 批量删除
+        清理服务端 merge 出来的历史工作流（数量过多会拖慢 Bioyond 排程初始化）
+
+        仅适用于反应站：反应站的 merge 工作流都是 type=0，核心子工作流是 type=2；
+        配液站的 type=0 是它自己的核心工作流，不能调用。
+
+        保留：
+        - 配置 workflow_mappings 里的核心子工作流（服务端也会忽略，这里再兜一层）
+        - 未结束订单（order-list 状态不是 80/90）正在使用的工作流，避免 unilab 重启时 Bioyond 还在跑实验
+        订单列表查询失败时整个跳过，不在无法确认的情况下删除。
         """
-        print("正在查询服务端工作流列表...")
         try:
-            # 查询工作流列表
-            # 仅需要ID，所以设置 includeDetail=False
-            query_params = {"includeDetail": False, "type": 0}
-            query_result = self._post_project_api("/api/lims/workflow/work-flow-list", query_params)
+            wf_result = self._post_project_api("/api/lims/workflow/work-flow-list", {"includeDetail": False, "type": 0})
+            if wf_result.get("code") != 1:
+                return {"code": 0, "message": f"查询工作流列表失败，跳过清理: {wf_result.get('message')}", "timestamp": int(time.time())}
+            data_obj = wf_result.get("data")
+            workflows = data_obj if isinstance(data_obj, list) else (data_obj or {}).get("items", [])
 
-            if query_result.get("code") != 1:
-                return query_result
+            orders = self.hardware_interface.order_query(json.dumps({
+                "timeType": "", "beginTime": "", "endTime": "", "status": "", "filter": "",
+                "skipCount": 0, "pageCount": 200, "sorting": "",
+            }))
+            if not isinstance(orders, dict) or "items" not in orders:
+                return {"code": 0, "message": "查询订单列表失败，无法确认哪些工作流在用，跳过清理", "timestamp": int(time.time())}
+            in_use_names = {
+                o.get("workflowName") for o in orders["items"]
+                if o.get("status") not in self.ORDER_LIST_FINISHED_STATUS
+            }
 
-            data_obj = query_result.get("data")
+            core_ids = set(self.bioyond_config.get("workflow_mappings", {}).values())
+            to_delete = [
+                str(wf["id"]) for wf in workflows
+                if wf.get("id") and wf["id"] not in core_ids and wf.get("name") not in in_use_names
+            ]
+            kept_in_use = [wf.get("name") for wf in workflows if wf.get("name") in in_use_names]
+            if not to_delete:
+                return {"code": 1, "message": f"无需清理（在用 {len(kept_in_use)} 个）", "deleted": 0, "kept_in_use": kept_in_use,
+                        "timestamp": int(time.time())}
 
-            # 处理返回值可能是列表或者分页对象的不同情况
-            if isinstance(data_obj, list):
-                workflows = data_obj
-            elif isinstance(data_obj, dict):
-                # 尝试从常见分页字段获取列表
-                workflows = data_obj.get("items", data_obj.get("list", []))
-            else:
-                workflows = []
+            # 分批删除，删完以列表复查为准（接口返回成功不代表一定删掉）
+            failed_batches = []
+            for i in range(0, len(to_delete), 50):
+                batch = to_delete[i:i + 50]
+                if self.hard_delete_merged_workflows(batch).get("code") != 1:
+                    failed_batches.append(i // 50)
 
-            if not workflows:
-                 print("无需删除: 服务端无工作流")
-                 return {"code": 1, "message": "服务端无工作流", "timestamp": int(time.time())}
-
-            ids_to_delete = []
-            for wf in workflows:
-                if isinstance(wf, dict):
-                    wf_id = wf.get("id")
-                    if wf_id:
-                        ids_to_delete.append(str(wf_id))
-
-            if not ids_to_delete:
-                print("无需删除: 无有效工作流ID")
-                return {"code": 1, "message": "无有效工作流ID", "timestamp": int(time.time())}
-
-            print(f"查询到 {len(ids_to_delete)} 个工作流，准备调用硬删除接口...")
-            # 硬删除
-            return self.hard_delete_merged_workflows(ids_to_delete)
+            after = self._post_project_api("/api/lims/workflow/work-flow-list", {"includeDetail": False, "type": 0})
+            if after.get("code") != 1:
+                return {"code": 0, "message": f"已提交删除 {len(to_delete)} 个，但复查工作流列表失败，结果未确认",
+                        "kept_in_use": kept_in_use, "timestamp": int(time.time())}
+            after_obj = after.get("data")
+            remaining_ids = {wf.get("id") for wf in (after_obj if isinstance(after_obj, list) else (after_obj or {}).get("items", []))}
+            deleted = sum(1 for wid in to_delete if wid not in remaining_ids)
+            message = f"清理 merge 工作流：删除 {deleted}/{len(to_delete)} 个，保留在用 {len(kept_in_use)} 个"
+            if failed_batches:
+                message += f"，失败批次 {failed_batches}"
+            return {"code": 1 if deleted == len(to_delete) else 0, "message": message, "deleted": deleted,
+                    "kept_in_use": kept_in_use, "timestamp": int(time.time())}
 
         except Exception as e:
-            print(f"❌ 清空工作流业务异常: {str(e)}")
+            print(f"❌ 清理工作流业务异常: {str(e)}")
             return {"code": 0, "message": str(e), "timestamp": int(time.time())}
 
     @not_action
     def hard_delete_merged_workflows(self, workflow_ids: List[str]) -> Dict[str, Any]:
         """
         调用新接口:硬删除合并后的工作流
-        根据用户反馈，/api/lims/order/workflows 接口存在校验问题
-        改用 /api/data/order/workflows?workFlowGuids=... 接口
+        文档 3.38 的 DELETE /api/lims/order/workflows 不可用（2026-10-23 实测）：
+        参数放 JSON body 时服务端读不到 apiKey（400 APIKey field is required），放 query 时 500。
+        改用 /api/data/order/workflows?workFlowGuids=... 接口（不校验 apiKey），核心子工作流会被服务端忽略
 
         Args:
             workflow_ids: 要删除的工作流ID数组
@@ -1386,12 +1412,16 @@ class BioyondReactionStation(BioyondWorkstation):
                 timeout=60
             )
 
-            if response.status_code == 200:
+            # HTTP 200 不代表删除成功，以响应体的 code 为准
+            try:
+                result = response.json()
+            except ValueError:
+                result = {}
+            if response.status_code == 200 and result.get("code") == 1:
                 print("✅ 删除请求成功")
                 return {"code": 1, "message": "删除成功", "timestamp": int(time.time())}
-            else:
-                print(f"❌ 删除失败: status={response.status_code}, content={response.text}")
-                return {"code": 0, "message": f"HTTP {response.status_code}: {response.text}", "timestamp": int(time.time())}
+            print(f"❌ 删除失败: status={response.status_code}, content={response.text}")
+            return {"code": 0, "message": f"HTTP {response.status_code}: {response.text}", "timestamp": int(time.time())}
 
         except Exception as e:
             print(f"❌ 硬删除异常: {str(e)}")
