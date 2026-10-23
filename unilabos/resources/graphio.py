@@ -2,8 +2,9 @@ import importlib
 import inspect
 import json
 import os.path
+import re
 import traceback
-from typing import Union, Any, Dict, List, Tuple
+from typing import Union, Any, Dict, List, Optional, Tuple
 import uuid
 import networkx as nx
 from pylabrobot.resources import ResourceHolder
@@ -953,6 +954,17 @@ def resource_bioyond_to_plr(bioyond_materials: list[dict], type_mapping: Dict[st
     return plr_materials
 
 
+def _parse_site_label(label: Any) -> Optional[Tuple[int, int]]:
+    """把 "B2" / "A01" 这类槽位标签解析为 (列索引, 行索引)，0-based；无法解析返回 None"""
+    m = re.fullmatch(r"([A-Za-z]+)(\d+)", str(label or ""))
+    if not m:
+        return None
+    row = 0
+    for ch in m.group(1).upper():
+        row = row * 26 + ord(ch) - ord("A") + 1
+    return int(m.group(2)) - 1, row - 1
+
+
 def resource_plr_to_bioyond(plr_resources: list[ResourcePLR], type_mapping: dict = {}, warehouse_mapping: dict = {}, material_params: dict = {}) -> list[dict]:
     """
     将 PyLabRobot 资源转换为 Bioyond 格式
@@ -1005,6 +1017,10 @@ def resource_plr_to_bioyond(plr_resources: list[ResourcePLR], type_mapping: dict
                         # ⭐ 优化：直接使用 get_child_identifier 获取真实的子物料坐标
                         # 这个方法会遍历 resource.children 找到 bottle 对象的实际位置
                         site = resource.get_child_identifier(bottle)
+                        # get_child_identifier 按行优先从线性索引推行列，但载架槽位是列优先（A1,B1,A2…），以槽位标签为准
+                        label_xy = _parse_site_label(site.get("identifier")) if site else None
+                        if label_xy:
+                            site["x"], site["y"] = label_xy
 
                         # 🔧 如果 get_child_identifier 失败或返回无效坐标 (0,0)
                         # 这通常发生在子物料名称使用纯数字后缀时（如 "BTDA_0", "BTDA_4"）
