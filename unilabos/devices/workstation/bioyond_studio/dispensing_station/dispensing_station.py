@@ -7,7 +7,7 @@ import requests
 import pint
 
 
-from unilabos.devices.workstation.bioyond_studio.bioyond_rpc import BioyondException
+from unilabos.devices.workstation.bioyond_studio.bioyond_rpc import BioyondException, name_mismatch_hint
 from unilabos.devices.workstation.bioyond_studio.station import BioyondWorkstation
 from unilabos.devices.workstation.bioyond_studio.report_parser import actuals_from_simplified_report, parse_channel_actuals
 from unilabos.registry.decorators import not_action
@@ -510,6 +510,26 @@ class BioyondDispensingStation(BioyondWorkstation):
 
         return results
 
+    def _resolve_hold_mid(self, workflow_id: str, hold_m_name: str) -> str:
+        """按入库名称(holdMName)查找工作流可用的 holdMId，未命中时提示相近名称"""
+        material_info = self.hardware_interface.material_id_query(workflow_id)
+        if not material_info:
+            raise BioyondException(f"无法查询工作流 {workflow_id} 的物料信息")
+
+        locations = material_info.get("locations", []) if isinstance(material_info, dict) else []
+        if not locations:
+            raise BioyondException(f"工作流 {workflow_id} 没有找到库位信息")
+
+        target = hold_m_name.strip()
+        for location in locations:
+            if location.get("holdMName") == target and location.get("holdMId"):
+                return location["holdMId"]
+
+        hint = name_mismatch_hint(target, (loc.get("holdMName") for loc in locations))
+        raise BioyondException(
+            f"hold_m_name「{hold_m_name}」与 Bioyond 入库记录不一致（区分大小写），未创建任务。{hint}"
+        )
+
     # 90%10%小瓶投料任务创建方法
     def create_90_10_vial_feeding_task(self,
                                        order_name: str = None,
@@ -644,24 +664,8 @@ class BioyondDispensingStation(BioyondWorkstation):
             workflow_id = "3a19310d-16b9-9d81-b109-0748e953694b"
 
             # 4. 查询工作流对应的holdMID
-            material_info = self.hardware_interface.material_id_query(workflow_id)
-            if not material_info:
-                raise BioyondException(f"无法查询工作流 {workflow_id} 的物料信息")
-
-            # 获取locations列表
-            locations = material_info.get("locations", []) if isinstance(material_info, dict) else []
-            if not locations:
-                raise BioyondException(f"工作流 {workflow_id} 没有找到库位信息")
-
-            # 查找指定名称的库位
-            hold_mid = None
-            for location in locations:
-                if location.get("holdMName") == hold_m_name:
-                    hold_mid = location.get("holdMId")
-                    break
-
-            if not hold_mid:
-                raise BioyondException(f"未找到库位名称为 {hold_m_name} 的库位，请检查名称是否正确")
+            hold_mid = self._resolve_hold_mid(workflow_id, hold_m_name)
+            hold_m_name = hold_m_name.strip()
 
             extend_properties = f"{{\"{ hold_mid }\": {{}}}}"
             self.hardware_interface._logger.info(f"找到库位 {hold_m_name} 对应的holdMId: {hold_mid}")
@@ -863,24 +867,8 @@ class BioyondDispensingStation(BioyondWorkstation):
             workflow_id = "3a15d4a1-3bbe-76f9-a458-292896a338f5"
 
             # 4. 查询工作流对应的holdMID
-            material_info = self.hardware_interface.material_id_query(workflow_id)
-            if not material_info:
-                raise BioyondException(f"无法查询工作流 {workflow_id} 的物料信息")
-
-            # 获取locations列表
-            locations = material_info.get("locations", []) if isinstance(material_info, dict) else []
-            if not locations:
-                raise BioyondException(f"工作流 {workflow_id} 没有找到库位信息")
-
-            # 查找指定名称的库位
-            hold_mid = None
-            for location in locations:
-                if location.get("holdMName") == hold_m_name:
-                    hold_mid = location.get("holdMId")
-                    break
-
-            if not hold_mid:
-                raise BioyondException(f"未找到库位名称为 {hold_m_name} 的库位，请检查名称是否正确")
+            hold_mid = self._resolve_hold_mid(workflow_id, hold_m_name)
+            hold_m_name = hold_m_name.strip()
 
             extend_properties = f"{{\"{ hold_mid }\": {{}}}}"
             self.hardware_interface._logger.info(f"找到库位 {hold_m_name} 对应的holdMId: {hold_mid}")

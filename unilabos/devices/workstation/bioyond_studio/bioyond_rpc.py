@@ -7,9 +7,26 @@ BioyondV1RPC类定义 - 负责HTTP接口通信和通用函数
 from enum import Enum
 from datetime import datetime, timezone
 from unilabos.device_comms.rpc import BaseRequest
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Iterable
+import difflib
 import json
 
+
+
+def name_mismatch_hint(name: str, candidates: Iterable[str], max_listed: int = 30) -> str:
+    """名称未命中时生成提示：优先给出相近名称，否则列出全部可选名称"""
+    names = sorted({c for c in candidates if c})
+    if not names:
+        return "当前没有可选名称"
+    close = difflib.get_close_matches(name, names, n=3, cutoff=0.5)
+    # 大小写/空格差异单独兜底，difflib 对短名称不敏感
+    normalized = name.replace(" ", "").lower()
+    close += [n for n in names if n.replace(" ", "").lower() == normalized and n not in close]
+    if close:
+        return f"是否想填：{'、'.join(close)}"
+    listed = "、".join(names[:max_listed])
+    more = f" 等共 {len(names)} 个" if len(names) > max_listed else ""
+    return f"可选名称：{listed}{more}"
 
 
 class SimpleLogger:
@@ -1182,8 +1199,11 @@ class BioyondV1RPC(BaseRequest):
             # 查询失败时保留原缓存，不清空
             print(f"加载材料列表缓存时出错，保留原缓存: {e}")
 
-    def _get_material_id_by_name(self, material_name_or_id: str) -> str:
-        """根据材料名称获取材料ID"""
+    def _get_material_id_by_name(self, material_name_or_id: str, strict: bool = False) -> Optional[str]:
+        """根据材料名称获取材料ID
+
+        strict=True 时名称未命中返回 None，由调用方报错；否则沿用旧行为返回原值
+        """
         if len(material_name_or_id) > 20 and '-' in material_name_or_id:
             return material_name_or_id
 
@@ -1200,6 +1220,9 @@ class BioyondV1RPC(BaseRequest):
             print(f"刷新缓存后找到材料: {material_name_or_id} -> ID: {material_id}")
             return material_id
 
+        if strict:
+            print(f"警告: 未在缓存中找到材料名称 '{material_name_or_id}'")
+            return None
         print(f"警告: 未在缓存中找到材料名称 '{material_name_or_id}'，将使用原值")
         return material_name_or_id
 

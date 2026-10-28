@@ -15,7 +15,7 @@ from unilabos.devices.workstation.bioyond_studio.reaction_station.paa_calculator
     nmp_supplement_formula,
 )
 from unilabos.registry.decorators import not_action
-from unilabos.devices.workstation.bioyond_studio.bioyond_rpc import MachineState
+from unilabos.devices.workstation.bioyond_studio.bioyond_rpc import MachineState, name_mismatch_hint
 from unilabos.ros.msgs.message_converter import convert_to_ros_msg, Float64, String
 
 
@@ -341,6 +341,17 @@ class BioyondReactionStation(BioyondWorkstation):
 
         return {"return_info": result}
 
+    @not_action
+    def _resolve_material_id(self, assign_material_name: str) -> str:
+        """物料名称转 Bioyond ID，未命中时报错并提示相近名称（须在追加工作流前调用，避免序列与参数队列错位）"""
+        if not assign_material_name:
+            raise ValueError("物料名称不能为空")
+        material_id = self.hardware_interface._get_material_id_by_name(assign_material_name.strip(), strict=True)
+        if material_id is None:
+            hint = name_mismatch_hint(assign_material_name.strip(), self.hardware_interface.get_available_materials())
+            raise ValueError(f"物料名称「{assign_material_name}」在 Bioyond 库存中不存在（区分大小写），未加入工作流。{hint}")
+        return material_id
+
     def reactor_taken_in(
         self,
         assign_material_name: str,
@@ -367,10 +378,8 @@ class BioyondReactionStation(BioyondWorkstation):
         except ValueError:
             raise ValueError("cutoff 必须是有效的数字字符串")
 
+        material_id = self._resolve_material_id(assign_material_name)
         self.append_to_workflow_sequence('{"web_workflow_name": "reactor_taken_in"}')
-        material_id = self.hardware_interface._get_material_id_by_name(assign_material_name)
-        if material_id is None:
-            raise ValueError(f"无法找到物料 {assign_material_name} 的 ID")
 
         if isinstance(temperature, str):
             temperature = float(temperature)
@@ -478,10 +487,8 @@ class BioyondReactionStation(BioyondWorkstation):
         mapped_titration_type = titration_map.get(str(titration_type), "1")
         mapped_torque_variation = int(torque_map.get(str(torque_variation), "1"))
 
+        material_id = self._resolve_material_id(assign_material_name)
         self.append_to_workflow_sequence('{"web_workflow_name": "Liquid_feeding_vials(non-titration)"}')
-        material_id = self.hardware_interface._get_material_id_by_name(assign_material_name)
-        if material_id is None:
-            raise ValueError(f"无法找到物料 {assign_material_name} 的 ID")
 
         if isinstance(temperature, str):
             temperature = float(temperature)
@@ -564,10 +571,8 @@ class BioyondReactionStation(BioyondWorkstation):
         elif volume is None:
             raise ValueError("必须提供 volume 或 solvents 参数之一")
 
+        material_id = self._resolve_material_id(assign_material_name)
         self.append_to_workflow_sequence('{"web_workflow_name": "Liquid_feeding_solvents"}')
-        material_id = self.hardware_interface._get_material_id_by_name(assign_material_name)
-        if material_id is None:
-            raise ValueError(f"无法找到物料 {assign_material_name} 的 ID")
 
         if isinstance(temperature, str):
             temperature = float(temperature)
@@ -697,10 +702,8 @@ class BioyondReactionStation(BioyondWorkstation):
         mapped_titration_type = titration_map.get(str(titration_type), "2")
         mapped_torque_variation = int(torque_map.get(str(torque_variation), "1"))
 
+        material_id = self._resolve_material_id(assign_material_name)
         self.append_to_workflow_sequence('{"web_workflow_name": "Liquid_feeding(titration)"}')
-        material_id = self.hardware_interface._get_material_id_by_name(assign_material_name)
-        if material_id is None:
-            raise ValueError(f"无法找到物料 {assign_material_name} 的 ID")
 
         if isinstance(temperature, str):
             temperature = float(temperature)
@@ -998,10 +1001,8 @@ class BioyondReactionStation(BioyondWorkstation):
         mapped_titration_type = titration_map.get(str(titration_type), "1")
         mapped_torque_variation = int(torque_map.get(str(torque_variation), "1"))
 
+        material_id = self._resolve_material_id(assign_material_name)
         self.append_to_workflow_sequence('{"web_workflow_name": "liquid_feeding_beaker"}')
-        material_id = self.hardware_interface._get_material_id_by_name(assign_material_name)
-        if material_id is None:
-            raise ValueError(f"无法找到物料 {assign_material_name} 的 ID")
 
         if isinstance(temperature, str):
             temperature = float(temperature)
@@ -1059,10 +1060,8 @@ class BioyondReactionStation(BioyondWorkstation):
         mapped_titration_type = titration_map.get(str(titration_type), "1")
         mapped_torque_variation = int(torque_map.get(str(torque_variation), "1"))
 
+        material_id = self._resolve_material_id(assign_material_name)
         self.append_to_workflow_sequence('{"web_workflow_name": "drip_back"}')
-        material_id = self.hardware_interface._get_material_id_by_name(assign_material_name)
-        if material_id is None:
-            raise ValueError(f"无法找到物料 {assign_material_name} 的 ID")
 
         if isinstance(temperature, str):
             temperature = float(temperature)
