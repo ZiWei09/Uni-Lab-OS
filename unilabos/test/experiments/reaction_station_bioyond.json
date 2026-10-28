@@ -16,131 +16,131 @@
             "class": "reaction_station.bioyond",
             "position": {
                 "x": 0,
-                "y": 1100,
+                "y": 1450,
                 "z": 0
             },
             "config": {
-                "api_key": "YOUR_API_KEY",
-                "api_host": "http://your-api-host:port",
+                "api_key": "DE9BDDA0",
+                "api_host": "http://172.21.103.36:45388",
                 "workflow_mappings": {
-                    "reactor_taken_out": "workflow-uuid-reactor-out",
-                    "reactor_taken_in": "workflow-uuid-reactor-in",
-                    "Solid_feeding_vials": "workflow-uuid-solid-vials",
-                    "Liquid_feeding_vials(non-titration)": "workflow-uuid-liquid-vials",
-                    "Liquid_feeding_solvents": "workflow-uuid-solvents",
-                    "Liquid_feeding(titration)": "workflow-uuid-titration",
-                    "liquid_feeding_beaker": "workflow-uuid-beaker",
-                    "Drip_back": "workflow-uuid-drip-back"
+                    "reactor_taken_out": "3a16081e-4788-ca37-eff4-ceed8d7019d1",
+                    "reactor_taken_in": "3a160df6-76b3-0957-9eb0-cb496d5721c6",
+                    "Solid_feeding_vials": "3a160877-87e7-7699-7bc6-ec72b05eb5e6",
+                    "Liquid_feeding_vials(non-titration)": "3a167d99-6158-c6f0-15b5-eb030f7d8e47",
+                    "Liquid_feeding_solvents": "3a160824-0665-01ed-285a-51ef817a9046",
+                    "Liquid_feeding(titration)": "3a16082a-96ac-0449-446a-4ed39f3365b6",
+                    "liquid_feeding_beaker": "3a16087e-124f-8ddb-8ec1-c2dff09ca784",
+                    "Drip_back": "3a162cf9-6aac-565a-ddd7-682ba1796a4a"
                 },
                 "material_type_mappings": {
                     "BIOYOND_PolymerStation_Reactor": [
                         "反应器",
-                        "uuid-placeholder-reactor"
+                        "3a14233b-902d-0d7b-4533-3f60f1c41c1b"
                     ],
                     "BIOYOND_PolymerStation_1BottleCarrier": [
                         "试剂瓶",
-                        "uuid-placeholder-bottle"
+                        "3a14233b-56e3-6c53-a8ab-fcaac163a9ba"
                     ],
                     "BIOYOND_PolymerStation_1FlaskCarrier": [
                         "烧杯",
-                        "uuid-placeholder-beaker"
+                        "3a14233b-f0a9-ba84-eaa9-0d4718b361b6"
                     ],
                     "BIOYOND_PolymerStation_6StockCarrier": [
                         "样品板",
-                        "uuid-placeholder-sample-plate"
+                        "3a142339-80de-8f25-6093-1b1b1b6c322e"
                     ],
                     "BIOYOND_PolymerStation_Solid_Vial": [
                         "90%分装小瓶",
-                        "uuid-placeholder-solid-vial"
+                        "3a14233a-26e1-28f8-af6a-60ca06ba0165"
                     ],
                     "BIOYOND_PolymerStation_Liquid_Vial": [
                         "10%分装小瓶",
-                        "uuid-placeholder-liquid-vial"
+                        "3a14233a-84a3-088d-6676-7cb4acd57c64"
                     ],
                     "BIOYOND_PolymerStation_TipBox": [
                         "枪头盒",
-                        "uuid-placeholder-tipbox"
+                        "3a143890-9d51-60ac-6d6f-6edb43c12041"
                     ],
                     "BIOYOND_PolymerStation_Measurement_Vial": [
                         "测量小瓶",
-                        "uuid-placeholder-measure-vial"
+                        "b1fc79c9-5864-4f05-8052-6ed3abc18a97"
                     ]
                 },
                 "warehouse_mapping": {
                     "堆栈1左": {
-                        "uuid": "uuid-placeholder-stack1-left",
+                        "uuid": "3a14aa17-0d49-dce4-486e-4b5c85c8b366",
                         "site_uuids": {
-                            "A01": "uuid-placeholder-site-A01",
-                            "A02": "uuid-placeholder-site-A02",
-                            "A03": "uuid-placeholder-site-A03",
-                            "A04": "uuid-placeholder-site-A04",
-                            "B01": "uuid-placeholder-site-B01",
-                            "B02": "uuid-placeholder-site-B02",
-                            "B03": "uuid-placeholder-site-B03",
-                            "B04": "uuid-placeholder-site-B04",
-                            "C01": "uuid-placeholder-site-C01",
-                            "C02": "uuid-placeholder-site-C02",
-                            "C03": "uuid-placeholder-site-C03",
-                            "C04": "uuid-placeholder-site-C04",
-                            "D01": "uuid-placeholder-site-D01",
-                            "D02": "uuid-placeholder-site-D02",
-                            "D03": "uuid-placeholder-site-D03",
-                            "D04": "uuid-placeholder-site-D04"
+                            "A01": "3a14aa17-0d49-11d7-a6e1-f236b3e5e5a3",
+                            "A02": "3a14aa17-0d49-4bc5-8836-517b75473f5f",
+                            "A03": "3a14aa17-0d49-c2bc-6222-5cee8d2d94f8",
+                            "A04": "3a14aa17-0d49-3ce2-8e9a-008c38d116fb",
+                            "B01": "3a14aa17-0d49-f49c-6b66-b27f185a3b32",
+                            "B02": "3a14aa17-0d49-cf46-df85-a979c9c9920c",
+                            "B03": "3a14aa17-0d49-7698-4a23-f7ffb7d48ba3",
+                            "B04": "3a14aa17-0d49-1231-99be-d5870e6478e9",
+                            "C01": "3a14aa17-0d49-be34-6fae-4aed9d48b70b",
+                            "C02": "3a14aa17-0d49-11d7-0897-34921dcf6b7c",
+                            "C03": "3a14aa17-0d49-9840-0bd5-9c63c1bb2c29",
+                            "C04": "3a14aa17-0d49-8335-3bff-01da69ea4911",
+                            "D01": "3a14aa17-0d49-2bea-c8e5-2b32094935d5",
+                            "D02": "3a14aa17-0d49-cff4-e9e8-5f5f0bc1ef32",
+                            "D03": "3a14aa17-0d49-4948-cb0a-78f30d1ca9b8",
+                            "D04": "3a14aa17-0d49-fd2f-9dfb-a29b11e84099"
                         }
                     },
                     "堆栈1右": {
-                        "uuid": "uuid-placeholder-stack1-right",
+                        "uuid": "3a14aa17-0d49-dce4-486e-4b5c85c8b366",
                         "site_uuids": {
-                            "A05": "uuid-placeholder-site-A05",
-                            "A06": "uuid-placeholder-site-A06",
-                            "A07": "uuid-placeholder-site-A07",
-                            "A08": "uuid-placeholder-site-A08",
-                            "B05": "uuid-placeholder-site-B05",
-                            "B06": "uuid-placeholder-site-B06",
-                            "B07": "uuid-placeholder-site-B07",
-                            "B08": "uuid-placeholder-site-B08",
-                            "C05": "uuid-placeholder-site-C05",
-                            "C06": "uuid-placeholder-site-C06",
-                            "C07": "uuid-placeholder-site-C07",
-                            "C08": "uuid-placeholder-site-C08",
-                            "D05": "uuid-placeholder-site-D05",
-                            "D06": "uuid-placeholder-site-D06",
-                            "D07": "uuid-placeholder-site-D07",
-                            "D08": "uuid-placeholder-site-D08"
+                            "A05": "3a14aa17-0d49-2c61-edc8-72a8ca7192dd",
+                            "A06": "3a14aa17-0d49-60c8-2b00-40b17198f397",
+                            "A07": "3a14aa17-0d49-ec5b-0b75-634dce8eed25",
+                            "A08": "3a14aa17-0d49-3ec9-55b3-f3189c4ec53d",
+                            "B05": "3a14aa17-0d49-6a4e-abcf-4c113eaaeaad",
+                            "B06": "3a14aa17-0d49-e3f6-2dd6-28c2e8194fbe",
+                            "B07": "3a14aa17-0d49-11a6-b861-ee895121bf52",
+                            "B08": "3a14aa17-0d49-9c7d-1145-d554a6e482f0",
+                            "C05": "3a14aa17-0d49-45c4-7a34-5105bc3e2368",
+                            "C06": "3a14aa17-0d49-867e-39ab-31b3fe9014be",
+                            "C07": "3a14aa17-0d49-ec56-c4b4-39fd9b2131e7",
+                            "C08": "3a14aa17-0d49-1128-d7d9-ffb1231c98c0",
+                            "D05": "3a14aa17-0d49-e843-f961-ea173326a14b",
+                            "D06": "3a14aa17-0d49-4d26-a985-f188359c4f8b",
+                            "D07": "3a14aa17-0d49-223a-b520-bc092bb42fe0",
+                            "D08": "3a14aa17-0d49-4fa3-401a-6a444e1cca22"
                         }
                     },
                     "站内试剂存放堆栈": {
-                        "uuid": "uuid-placeholder-reagent-stack",
+                        "uuid": "3a14aa3b-9fab-9d8e-d1a7-828f01f51f0c",
                         "site_uuids": {
-                            "A01": "uuid-placeholder-reagent-A01",
-                            "A02": "uuid-placeholder-reagent-A02"
+                            "A01": "3a14aa3b-9fab-adac-7b9c-e1ee446b51d5",
+                            "A02": "3a14aa3b-9fab-ca72-febc-b7c304476c78"
                         }
                     },
                     "测量小瓶仓库(测密度)": {
-                        "uuid": "uuid-placeholder-density-stack",
+                        "uuid": "3a15012f-705b-c0de-3f9e-950c205f9921",
                         "site_uuids": {
-                            "A01": "uuid-placeholder-density-A01",
-                            "A02": "uuid-placeholder-density-A02",
-                            "A03": "uuid-placeholder-density-A03",
-                            "B01": "uuid-placeholder-density-B01",
-                            "B02": "uuid-placeholder-density-B02",
-                            "B03": "uuid-placeholder-density-B03"
+                            "A01": "3a15012f-705e-0524-3161-c523b5aebc97",
+                            "A02": "3a15012f-705e-7cd1-32ab-ad4fd1ab75c8",
+                            "A03": "3a15012f-705e-a5d6-edac-bdbfec236260",
+                            "B01": "3a15012f-705e-e0ee-80e0-10a6b3fc500d",
+                            "B02": "3a15012f-705e-e499-180d-de06d60d0b21",
+                            "B03": "3a15012f-705e-eff6-63f1-09f742096b26"
                         }
                     },
                     "站内Tip盒堆栈(左)": {
-                        "uuid": "uuid-placeholder-tipstack-left",
+                        "uuid": "3a14aa3a-2d3c-b5c1-9ddf-7c4a957d459a",
                         "site_uuids": {
-                            "A02": "uuid-placeholder-tip-A02",
-                            "A03": "uuid-placeholder-tip-A03",
-                            "B02": "uuid-placeholder-tip-B02",
-                            "B03": "uuid-placeholder-tip-B03"
+                            "A02": "3a14aa3a-2d3d-a7ce-099a-d5632fdafa24",
+                            "A03": "3a14aa3a-2d3d-bdf6-a702-c60b38b08501",
+                            "B02": "3a14aa3a-2d3d-c350-2526-0778d173a5ac",
+                            "B03": "3a14aa3a-2d3d-bc38-b356-f0de2e44e0c7"
                         }
                     },
                     "站内Tip盒堆栈(右)": {
-                        "uuid": "uuid-placeholder-tipstack-right",
+                        "uuid": "3a14aa3a-2d3c-b5c1-9ddf-7c4a957d459b",
                         "site_uuids": {
-                            "A01": "uuid-placeholder-tip-A01",
-                            "B01": "uuid-placeholder-tip-B01"
+                            "A01": "3a14aa3a-2d3d-e700-411a-0ddf85e1f18a",
+                            "B01": "3a14aa3a-2d3d-d704-f076-2a8d5bc72cb8"
                         }
                     }
                 },
@@ -218,11 +218,14 @@
             "type": "device",
             "class": "reaction_station.reactor",
             "position": {
-                "x": 1150,
-                "y": 300,
+                "x": 1139,
+                "y": 583,
                 "z": 0
             },
-            "config": {},
+            "config": {
+                "size_x": 200,
+                "size_y": 200
+            },
             "data": {}
         },
         {
@@ -233,11 +236,14 @@
             "type": "device",
             "class": "reaction_station.reactor",
             "position": {
-                "x": 1365,
-                "y": 300,
+                "x": 1364,
+                "y": 583,
                 "z": 0
             },
-            "config": {},
+            "config": {
+                "size_x": 200,
+                "size_y": 200
+            },
             "data": {}
         },
         {
@@ -248,11 +254,14 @@
             "type": "device",
             "class": "reaction_station.reactor",
             "position": {
-                "x": 1580,
-                "y": 300,
+                "x": 1583,
+                "y": 582,
                 "z": 0
             },
-            "config": {},
+            "config": {
+                "size_x": 200,
+                "size_y": 200
+            },
             "data": {}
         },
         {
@@ -263,11 +272,14 @@
             "type": "device",
             "class": "reaction_station.reactor",
             "position": {
-                "x": 1790,
-                "y": 300,
+                "x": 1803,
+                "y": 583,
                 "z": 0
             },
-            "config": {},
+            "config": {
+                "size_x": 200,
+                "size_y": 200
+            },
             "data": {}
         },
         {
@@ -278,11 +290,14 @@
             "type": "device",
             "class": "reaction_station.reactor",
             "position": {
-                "x": 2010,
-                "y": 300,
+                "x": 2019,
+                "y": 582,
                 "z": 0
             },
-            "config": {},
+            "config": {
+                "size_x": 200,
+                "size_y": 200
+            },
             "data": {}
         },
         {
@@ -294,7 +309,7 @@
             "class": "BIOYOND_PolymerReactionStation_Deck",
             "position": {
                 "x": 0,
-                "y": 1100,
+                "y": 1450,
                 "z": 0
             },
             "config": {
