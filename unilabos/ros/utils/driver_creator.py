@@ -52,6 +52,11 @@ class DeviceClassCreator(Generic[T]):
         if self.device_instance is not None:
             for c in self.children:
                 if c.res_content.type != "device":
+                    # 已登记的资源（如工作站创建时已实例化的 deck）不再重复实例化，否则新实例会覆盖 uuid 映射，
+                    # 后续按 uuid 找到的是一份不含已同步物料的副本
+                    if c.res_content.uuid in self.resource_tracker.uuid_to_resources:
+                        logger.debug(f"资源 {c.res_content.name} 已在资源跟踪器中，跳过重复附加")
+                        continue
                     res = ResourceTreeSet([ResourceTreeInstance(c)]).to_plr_resources()[0]
                     self.resource_tracker.add_resource(res)
 
