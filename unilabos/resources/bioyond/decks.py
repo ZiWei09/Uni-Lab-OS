@@ -55,11 +55,11 @@ class BIOYOND_PolymerReactionStation_Deck(Deck):
             "测量小瓶仓库(测密度)": bioyond_warehouse_density_vial("测量小瓶仓库(测密度)"),  # A01～B03
         }
         self.warehouse_locations = {
-            "堆栈1左": Coordinate(-203.0, 261.0, 0.0),  # 左侧位置
-            "堆栈1右": Coordinate(2334.0, 258.0, 0.0),  # 右侧位置
+            "堆栈1左": Coordinate(-203.0, 260.0, 0.0),  # 左侧位置
+            "堆栈1右": Coordinate(2334.0, 260.0, 0.0),  # 右侧位置
             "站内试剂存放堆栈": Coordinate(630.0, 626.0, 0.0),
-            "站内Tip盒堆栈(左)": Coordinate(314.0, 814.0, 0.0),
-            "站内Tip盒堆栈(右)": Coordinate(2224.0, 794.0, 0.0),
+            "站内Tip盒堆栈(左)": Coordinate(314.0, 804.0, 0.0),
+            "站内Tip盒堆栈(右)": Coordinate(2224.0, 804.0, 0.0),
             "测量小瓶仓库(测密度)": Coordinate(1000.0, 530.0, 0.0),
         }
 
