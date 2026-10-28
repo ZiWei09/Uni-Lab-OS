@@ -26,6 +26,12 @@ PARAM_SAMPLE_UUIDS = "sample_uuids"
 # JSON Command 中的系统参数字段名
 JSON_UNILABOS_PARAM = "unilabos_param"
 
+# unilabos_param 中的工作流运行ID（同一次工作流运行的所有节点相同）
+PARAM_TASK_ID = "task_id"
+
+# 驱动可选实现的钩子：每次执行动作前以 task_id 调用，用于识别新一次工作流运行
+DRIVER_TASK_HOOK = "on_unilab_task"
+
 # 返回值中的 samples 字段名
 RETURN_UNILABOS_SAMPLES = "unilabos_samples"
 

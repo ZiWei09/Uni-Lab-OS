@@ -349,7 +349,8 @@ class BioyondReactionStation(BioyondWorkstation):
         material_id = self.hardware_interface._get_material_id_by_name(assign_material_name.strip(), strict=True)
         if material_id is None:
             hint = name_mismatch_hint(assign_material_name.strip(), self.hardware_interface.get_available_materials())
-            raise ValueError(f"物料名称「{assign_material_name}」在 Bioyond 库存中不存在（区分大小写），未加入工作流。{hint}")
+            self._discard_pending_workflow(f"物料名称 {assign_material_name} 校验失败")
+            raise ValueError(f"物料名称「{assign_material_name}」在 Bioyond 库存中不存在（区分大小写），本次已累积的步骤已全部清空，请修正后从头重新运行。{hint}")
         return material_id
 
     def reactor_taken_in(
@@ -1905,6 +1906,38 @@ class BioyondReactionStation(BioyondWorkstation):
         Returns:
             任务创建结果
         """
+        # 无论在哪一步失败(解析/合并/下单/异常),本次累积的序列和参数都作废,避免带进下一次实验
+        try:
+            return self._merge_and_create_order(workflow_name, task_name)
+        finally:
+            self._discard_pending_workflow("process_and_execute_workflow 结束")
+
+    @not_action
+    def on_unilab_task(self, task_id: str) -> None:
+        """框架在每个动作执行前调用：换了一次工作流运行，就丢弃上一次没提交的残留步骤
+
+        覆盖用户手动中止工作流、process_and_execute_workflow 没被执行到的情况
+        """
+        previous = getattr(self, "_current_unilab_task_id", None)
+        self._current_unilab_task_id = task_id
+        if previous is None or previous == task_id:
+            return
+        if self._cached_workflow_sequence or self.pending_task_params or self.pending_time_constraints:
+            print(
+                f"⚠️ 新工作流运行 {task_id[:8]} 开始，上一次运行 {previous[:8]} 有未提交的残留步骤"
+                f"（序列 {len(self._cached_workflow_sequence)}、参数 {len(self.pending_task_params)}），已丢弃"
+            )
+            self._discard_pending_workflow("新工作流运行开始")
+
+    @not_action
+    def _discard_pending_workflow(self, reason: str) -> None:
+        """清空本地累积的工作流序列、参数和时间约束（Bioyond 侧尚未合并，无需清理）"""
+        self.pending_task_params = []
+        self.clear_workflows()
+        print(f"✅ 已清理 pending_task_params / workflow_sequence / 时间约束（{reason}）")
+
+    @not_action
+    def _merge_and_create_order(self, workflow_name: str, task_name: str) -> str:
         web_workflow_list = self.get_workflow_sequence()
         print(f"\n{'='*60}")
         print(f"📋 处理网页工作流列表: {web_workflow_list}")
@@ -2042,22 +2075,15 @@ class BioyondReactionStation(BioyondWorkstation):
             "paramValues": {}
         }]
 
-        # 尝试创建订单:无论成功或失败,都需要在本次尝试结束后清理本地队列,避免下一次重复累积
+        # 本地队列由 process_and_execute_workflow 的 finally 统一清理
         try:
             result = self.create_order(json.dumps(order_params))
-            if not result:
-                # 返回错误结果之前先记录情况(稍后由 finally 清理队列)
-                print("⚠️ 创建任务返回空或失败响应,稍后将清理本地队列以避免重复累积")
-                return self._create_error_result("创建任务失败", "create_order")
-        finally:
-            # 无论任务创建成功与否,都要清空本地保存的参数和工作流序列,防止下次重复
-            try:
-                self.pending_task_params = []
-                self.clear_workflows()  # 清空工作流序列,避免重复累积
-                print("✅ 已清理 pending_task_params 与 workflow_sequence")
-            except Exception as _ex:
-                # 记录清理失败,但不要阻塞原始返回
-                print(f"❌ 清理队列时发生异常: {_ex}")
+        except Exception:
+            self._delete_orphan_merged_workflow(workflow_id)
+            raise
+        if not result:
+            self._delete_orphan_merged_workflow(workflow_id)
+            return self._create_error_result("创建任务失败", "create_order")
 
         # print(f"\n✅ 任务创建成功: {result}")
         # print(f"\n✅ 任务创建成功")
@@ -2070,6 +2096,17 @@ class BioyondReactionStation(BioyondWorkstation):
             "merged_workflow": merged_workflow,
             "order_params": order_params
         })
+
+    @not_action
+    def _delete_orphan_merged_workflow(self, workflow_id: str) -> None:
+        """下单失败时删除 Bioyond 上刚合并出来、没有订单引用的工作流"""
+        if not workflow_id:
+            return
+        result = self.hard_delete_merged_workflows([workflow_id])
+        if result.get("code") == 1:
+            print(f"✅ 已删除下单失败遗留的合并工作流 {workflow_id}")
+        else:
+            print(f"⚠️ 删除合并工作流 {workflow_id} 失败，将在下次启动时清理: {result.get('message')}")
 
     # ==================== 反应器操作接口 ====================
 

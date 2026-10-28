@@ -49,7 +49,7 @@ from unilabos.resources.resource_tracker import (
     ResourceTreeInstance,
     RETURN_UNILABOS_SAMPLES,
     JSON_UNILABOS_PARAM,
-    PARAM_SAMPLE_UUIDS, SampleUUIDsType, LabSample,
+    PARAM_SAMPLE_UUIDS, PARAM_TASK_ID, SampleUUIDsType, LabSample,
 )
 from unilabos.ros.initialize_device import initialize_device_from_dict
 from unilabos.ros.msgs.message_converter import (
@@ -889,6 +889,7 @@ class HostNode(BaseROS2DeviceNode):
                 "function_args": action_kwargs,
                 JSON_UNILABOS_PARAM: {
                     PARAM_SAMPLE_UUIDS: sample_material,
+                    PARAM_TASK_ID: item.task_id,
                 },
             }
             action_kwargs = {"string": json.dumps(json_command)}

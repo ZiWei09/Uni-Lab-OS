@@ -71,6 +71,8 @@ from unilabos.resources.resource_tracker import (
     ResourceDictInstance,
     EXTRA_SAMPLE_UUID,
     PARAM_SAMPLE_UUIDS,
+    PARAM_TASK_ID,
+    DRIVER_TASK_HOOK,
     JSON_UNILABOS_PARAM,
 )
 from unilabos.ros.utils.driver_creator import WorkstationNodeCreator, PyLabRobotCreator, DeviceClassCreator
@@ -2316,6 +2318,13 @@ class BaseROS2DeviceNode(Node, Generic[T]):
 
         return execute_callback
 
+    def _notify_driver_task(self, unilabos_param: Dict[str, Any]) -> None:
+        """把本次动作所属的工作流运行ID交给驱动（驱动实现了 on_unilab_task 时才调用）"""
+        task_id = unilabos_param.get(PARAM_TASK_ID)
+        hook = getattr(self.driver_instance, DRIVER_TASK_HOOK, None)
+        if task_id and callable(hook):
+            hook(task_id)
+
     def _execute_driver_command(self, string: str):
         try:
             target = json.loads(string)
@@ -2337,6 +2346,8 @@ class BaseROS2DeviceNode(Node, Generic[T]):
             assert callable(
                 function
             ), f"执行动作时JSON中的function_name对应的函数不可调用: {function_name}\n原JSON: {string}"
+
+            self._notify_driver_task(unilabos_param)
 
             # 处理参数（包含 unilabos 系统参数如 sample_uuids）
             args_list = default_manager._analyze_method_signature(function, skip_unilabos_params=False)["args"]
@@ -2521,6 +2532,8 @@ class BaseROS2DeviceNode(Node, Generic[T]):
             assert asyncio.iscoroutinefunction(
                 function
             ), f"执行动作时JSON中的function并非异步: {function_name}\n原JSON: {string}"
+
+            self._notify_driver_task(unilabos_param)
 
             # 处理参数（包含 unilabos 系统参数如 sample_uuids）
             args_list = default_manager._analyze_method_signature(function, skip_unilabos_params=False)["args"]
