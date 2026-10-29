@@ -390,7 +390,7 @@ bioyond_dispensing_station:
                 hold_m_name:
                   type: string
                   title: 6孔板库位名称
-                  description: 6孔板库位名称，如"C01"，用于查找对应的库位ID
+                  description: 6孔板库位名称，用于查找对应的库位ID
               title: DispenStationVialFeed_Goal
             feedback:
               type: object
