@@ -1373,7 +1373,7 @@ class HostNode(BaseROS2DeviceNode):
                 devices_config = info.pop("devices_config")
                 registry_config = info.pop("registry_config")
                 if registry_config:
-                    http_client.resource_registry({"resources": registry_config})
+                    http_client.resource_registry({"resources": list(registry_config.values())})
 
                     # 存储 slave 的 registry_config,用于后续 SYNC_SLAVE_NODE_INFO 索引
                     for reg_name, reg_data in registry_config.items():
