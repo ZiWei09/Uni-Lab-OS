@@ -511,10 +511,10 @@ bioyond_dispensing_station:
           material_name: ''
           target_weigh: ''
           volume: ''
-          liquid_material_name: ''
-          speed: ''
-          temperature: ''
-          delay_time: ''
+          liquid_material_name: NMP
+          speed: '400'
+          temperature: '20'
+          delay_time: '600'
           hold_m_name: ''
         handles: {}
         placeholder_keys: {}

@@ -817,9 +817,9 @@ class BioyondDispensingStation(BioyondWorkstation):
                                     target_weigh: str = None,
                                     volume: str = None,
                                     liquid_material_name: str = "NMP",
-                                    speed: str = None,
-                                    temperature: str = None,
-                                    delay_time: str = None,
+                                    speed: str = "400",
+                                    temperature: str = "20",
+                                    delay_time: str = "600",
                                     hold_m_name: str = None) -> dict:
         """
         创建二胺溶液配置任务
@@ -830,9 +830,9 @@ class BioyondDispensingStation(BioyondWorkstation):
         - target_weigh: 固体目标重量，必填
         - volume: 液体体积，必填
         - liquid_material_name: 液体物料名称，默认为NMP
-        - speed: 搅拌速度，如果为None则使用默认值400
-        - temperature: 温度，如果为None则使用默认值20
-        - delay_time: 延迟时间，如果为None则使用默认值600
+        - speed: 搅拌速度，不传或留空则使用默认值400
+        - temperature: 温度，不传或留空则使用默认值20
+        - delay_time: 延迟时间，不传或留空则使用默认值600
         - hold_m_name: 库位名称，如"ODA-1"，用于查找对应的holdMId
 
         返回: 任务创建结果
@@ -852,16 +852,28 @@ class BioyondDispensingStation(BioyondWorkstation):
                 raise BioyondException("hold_m_name 是必填参数")
 
 
-            # 2. 生成任务编码和设置默认值
+            # 2. 生成任务编码和设置默认值。ROS 字符串字段会将未填写值传为空字符串。
             order_code = "task_oda_" + str(int(datetime.now().timestamp()))
-            if order_name is None:
+            if order_name is None or not str(order_name).strip():
                 order_name = f"二胺溶液配置-{material_name}"
-            if speed is None:
+            else:
+                order_name = str(order_name).strip()
+            if liquid_material_name is None or not str(liquid_material_name).strip():
+                liquid_material_name = "NMP"
+            else:
+                liquid_material_name = str(liquid_material_name).strip()
+            if speed is None or not str(speed).strip():
                 speed = "400"
-            if temperature is None:
+            else:
+                speed = str(speed).strip()
+            if temperature is None or not str(temperature).strip():
                 temperature = "20"
-            if delay_time is None:
+            else:
+                temperature = str(temperature).strip()
+            if delay_time is None or not str(delay_time).strip():
                 delay_time = "600"
+            else:
+                delay_time = str(delay_time).strip()
 
             # 3. 工作流ID - 二胺溶液配置工作流
             workflow_id = "3a15d4a1-3bbe-76f9-a458-292896a338f5"
